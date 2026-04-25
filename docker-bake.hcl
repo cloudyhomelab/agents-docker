@@ -1,9 +1,9 @@
 variable "REGISTRY" { default = "docker.io" }
 variable "NAMESPACE"  { default = "binarycodes" }
 
-variable "CLAUDE_VERSION" { default = "2.1.117" }
-variable "CODEX_VERSION" { default = "0.122.0" }
-variable "GEMINI_VERSION" { default = "0.38.2" }
+variable "CLAUDE_VERSION" { default = "2.1.119" }
+variable "CODEX_VERSION" { default = "0.125.0" }
+variable "GEMINI_VERSION" { default = "0.39.1" }
 
 variable "LOCAL" { default = false }
 
