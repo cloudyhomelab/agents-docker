@@ -38,7 +38,7 @@ target "python" {
     CLAUDE_VERSION = CLAUDE_VERSION
     CODEX_VERSION = CODEX_VERSION
     GEMINI_VERSION = GEMINI_VERSION
-    EXTRA_PACKAGES = "python3 python3-pip python3-venv"
+    EXTRA_PACKAGES = "python3 python3-pip python3-venv ansible ansible-lint"
   }
 
   matrix = {
