@@ -29,8 +29,13 @@ FROM base AS go
 ARG GO_VERSION
 ARG TARGETARCH
 
-RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz" \
-    | tar -xz -C /usr/local
+# Downloaded to a file first: piping straight into tar turns a bad response into
+# a misleading "unexpected end of file" from gzip instead of the HTTP error, and
+# dl.google.com is the redirect target of go.dev/dl anyway, one less hop to fail.
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        -o /tmp/go.tar.gz "https://dl.google.com/go/go${GO_VERSION}.linux-${TARGETARCH}.tar.gz" \
+    && tar -xzf /tmp/go.tar.gz -C /usr/local \
+    && rm /tmp/go.tar.gz
 
 ENV GOROOT="/usr/local/go"
 # GOPATH keeps its default of ${HOME}/go, so a mounted home volume also caches
@@ -50,20 +55,37 @@ ARG JAVA_LATEST
 # which is seeded only on first use and would otherwise pin every toolchain to
 # whatever the image held on the day the volume was created.
 ENV SDKMAN_DIR="/opt/sdkman"
-RUN curl -fsSL "https://get.sdkman.io?ci=true&rcupdate=false" | bash
+# Fetched to a file rather than piped into bash: /bin/sh has no pipefail, so a
+# failed download would feed bash an empty script and still exit 0.
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        -o /tmp/sdkman.sh "https://get.sdkman.io?ci=true&rcupdate=false" \
+    && bash /tmp/sdkman.sh \
+    && rm /tmp/sdkman.sh
 
-RUN bash -c 'source "${SDKMAN_DIR}/bin/sdkman-init.sh" \
-    && for version in ${JAVA_VERSIONS}; do sdk install java "${version}"; done \
-    && sdk install maven'
+# set -e only after sourcing, since sdkman-init.sh is not written to run under
+# it; and the steps are ';'-separated rather than '&&'-chained, because errexit
+# is suppressed inside a compound command that is part of an AND list -- there a
+# failed `sdk install` is swallowed and the image ships a JDK short.
+RUN bash -c 'source "${SDKMAN_DIR}/bin/sdkman-init.sh"; \
+    set -e; \
+    for version in ${JAVA_VERSIONS}; do sdk install java "${version}"; done; \
+    sdk install maven'
 
 # Stable per-major paths, so selecting a JDK at run time needs only "21" and
 # not the full "21.0.10.fx-zulu" vendor string.
+# Every target is checked, because ln -s happily creates a dangling link and the
+# breakage would only surface at run time, inside someone's session.
 RUN mkdir -p /opt/java \
     && for version in ${JAVA_VERSIONS}; do \
-         ln -s "${SDKMAN_DIR}/candidates/java/${version}" "/opt/java/${version%%.*}"; \
+         candidate="${SDKMAN_DIR}/candidates/java/${version}"; \
+         test -d "${candidate}" || { echo "missing JDK: ${candidate}" >&2; exit 1; }; \
+         ln -s "${candidate}" "/opt/java/${version%%.*}"; \
        done \
+    && test -d "/opt/java/${JAVA_LTS}" || { echo "JAVA_LTS=${JAVA_LTS} not among JAVA_VERSIONS" >&2; exit 1; } \
+    && test -d "/opt/java/${JAVA_LATEST}" || { echo "JAVA_LATEST=${JAVA_LATEST} not among JAVA_VERSIONS" >&2; exit 1; } \
     && ln -s "${JAVA_LTS}" /opt/java/lts \
     && ln -s "${JAVA_LATEST}" /opt/java/latest \
+    && test -d "${SDKMAN_DIR}/candidates/maven/current" \
     && chmod -R a+rX /opt
 
 ENV M2_HOME="${SDKMAN_DIR}/candidates/maven/current"
@@ -87,7 +109,7 @@ ARG CLAUDE_VERSION
 
 # The installer is ${HOME}-relative and its launcher is an absolute symlink, so
 # a throwaway HOME relocates the whole install out of the agent's home volume.
-RUN HOME=/opt/claude bash -c 'curl -fsSL "https://claude.ai/install.sh" | bash -s "${CLAUDE_VERSION}"' \
+RUN HOME=/opt/claude bash -o pipefail -c 'curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "https://claude.ai/install.sh" | bash -s "${CLAUDE_VERSION}"' \
     && ln -s /opt/claude/.local/bin/claude /usr/local/bin/claude \
     && chmod -R a+rX /opt/claude
 
