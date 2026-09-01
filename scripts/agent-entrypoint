@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Selects the JDK for this container. The image ships every supported major, so
+# JAVA_HOME cannot be baked into an ENV layer -- it is resolved per run, in
+# order of how explicit the request is: the environment wins, then whatever the
+# project itself declares, then the LTS default.
+set -euo pipefail
+
+java_dir="/opt/java"
+
+resolve_project_version() {
+    if [[ -f .sdkmanrc ]]; then
+        sed -n 's/^[[:space:]]*java=\([0-9][0-9]*\).*/\1/p' .sdkmanrc | head -n 1
+    elif [[ -f .java-version ]]; then
+        # Accepts both "21" and vendor strings such as "21.0.10.fx-zulu".
+        sed -n 's/^[[:space:]]*\([0-9][0-9]*\).*/\1/p' .java-version | head -n 1
+    fi
+}
+
+requested="${JAVA_VERSION:-}"
+[[ -z ${requested} ]] && requested="$(resolve_project_version)"
+[[ -z ${requested} ]] && requested="lts"
+
+if [[ -d "${java_dir}/${requested}" ]]; then
+    export JAVA_HOME="${java_dir}/${requested}"
+    export PATH="${JAVA_HOME}/bin:${PATH}"
+else
+    # Keep going with the default rather than failing: most sessions in a
+    # mistagged container are not Java work and should not be blocked by it.
+    echo "agent-entrypoint: no JDK '${requested}' in this image; available: $(cd "${java_dir}" && echo *)" >&2
+    export JAVA_HOME="${java_dir}/lts"
+    export PATH="${JAVA_HOME}/bin:${PATH}"
+fi
+
+exec "$@"

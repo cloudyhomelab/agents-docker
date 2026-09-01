@@ -37,7 +37,7 @@ jobs:
         run: |
           changed=$(git diff HEAD~1 HEAD -- docker-bake.hcl \
             | grep '^+variable' \
-            | grep -oP '(?<=")[A-Z]+(?=_VERSION")' \
+            | grep -oP '(?<=")(CLAUDE|CODEX|GEMINI)(?=_VERSION")' \
             | tr '[:upper:]' '[:lower:]' \
             | tr '\n' ',' | sed 's/,$//')
           echo "agents=${changed:-claude,codex,gemini}" >> "$GITHUB_OUTPUT"

@@ -1,0 +1,83 @@
+# Wrappers that run the containerised agent CLIs against a project directory.
+#
+# Source this from ~/.zshrc:
+#     source /path/to/shell-helper/zshrc
+#
+# Each function shadows a CLI of the same name on PATH, so the container is
+# what runs by default. JAVA_VERSION is forwarded only when set, leaving a
+# project's own .sdkmanrc or .java-version in charge otherwise;
+# <AGENT>_IMAGE_TAG pins a published version tag instead of latest.
+#
+#     claude .
+#     JAVA_VERSION=17 claude . --resume
+#     CODEX_IMAGE_TAG=0.152.0 codex ~/some/project
+
+# Shared plumbing: _agent_run <tool> <tag> <workspace> [cli args...]
+_agent_run() {
+    local tool="$1"
+    local tag="$2"
+    local workspace="$3"
+
+    if [[ ! -d "$workspace" ]]; then
+        printf 'usage: %s <workspace> [%s args...]\n' "$tool" "$tool" >&2
+        return 1
+    fi
+    shift 3
+
+    local workspace_abs name tmp_path
+    local -a config cmd
+
+    workspace_abs="$(cd "$workspace" && pwd -P)" || return 1
+    # docker accepts a limited character set for --name
+    # $RANDOM as well as the timestamp: two instances can start in the same
+    # second, and $$ alone repeats when both are launched from one shell
+    name="${tool}-$(basename "$workspace_abs")-$(date +%s)-${RANDOM}"
+    name="${name//[^a-zA-Z0-9_.-]/-}"
+
+    # Credentials and settings differ per CLI, so each gets its own volume.
+    case "$tool" in
+        claude)
+            # .claude.json is bind mounted as a file to keep it editable from
+            # the host, unlike the rest of the config.
+            tmp_path="$HOME/.tmp-claude"
+            if [[ ! -f "${tmp_path}/claude.json" ]]; then
+                mkdir -p "${tmp_path}"
+                touch "${tmp_path}/claude.json"
+            fi
+            config=(
+                -v claude_config:/home/agent/.claude
+                -v "${tmp_path}/claude.json:/home/agent/.claude.json"
+            )
+            ;;
+        codex)
+            config=(-v codex_config:/home/agent/.codex)
+            ;;
+    esac
+
+    cmd=(
+        docker run
+        --rm
+        -it
+        --pull always
+        "${config[@]}"
+        -v "${workspace_abs}:/workspace"
+        -v "$HOME/.m2:/home/agent/.m2"
+        -v "${tool}_go:/home/agent/go"
+        -v "${tool}_cache:/home/agent/.cache"
+        -w /workspace
+        -e JAVA_VERSION
+        --name "$name"
+        "docker.io/binarycodes/${tool}:${tag}"
+        "$@" # forward extra args
+    )
+
+    "${cmd[@]}"
+}
+
+claude() {
+    _agent_run claude "${CLAUDE_IMAGE_TAG:-latest}" "$@"
+}
+
+codex() {
+    _agent_run codex "${CODEX_IMAGE_TAG:-latest}" "$@"
+}
