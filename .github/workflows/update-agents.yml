@@ -29,9 +29,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          ./.github/scripts/check-claude-update.sh
-          ./.github/scripts/check-codex-update.sh
-          ./.github/scripts/check-gemini-update.sh
+          ./.github/scripts/check-updates.sh
 
           # An empty log means nothing moved, and the outputs below stay unset
           # so the next step skips rather than describing a bump that is not
