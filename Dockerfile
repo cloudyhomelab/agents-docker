@@ -6,6 +6,7 @@ ARG JAVA_VERSIONS
 ARG JAVA_LTS
 ARG JAVA_LATEST
 ARG PACKAGES
+ARG PIP_PACKAGES
 
 
 #====================
@@ -31,9 +32,30 @@ RUN install -d -o agent -g agent /home/agent/.cache
 
 
 #====================
+# install python tools
+#====================
+FROM base AS python
+ARG PIP_PACKAGES
+
+# A venv rather than a system-wide pip install: Debian marks its interpreter
+# externally managed, so pip refuses to touch it. --system-site-packages lets
+# these tools import the apt-installed ansible instead of resolving a second
+# copy of ansible-core into the venv.
+ENV VIRTUAL_ENV="/opt/venv"
+RUN python3 -m venv --system-site-packages "${VIRTUAL_ENV}" \
+    && "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip \
+    && "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir ${PIP_PACKAGES} \
+    && chmod -R a+rX "${VIRTUAL_ENV}"
+
+# Ahead of /usr/bin, so `python3` in a session is the interpreter that can
+# actually import these tools.
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+
+#====================
 # install go
 #====================
-FROM base AS go
+FROM python AS go
 ARG GO_VERSION
 ARG TARGETARCH
 

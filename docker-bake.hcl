@@ -70,9 +70,21 @@ variable "PACKAGES" {
   ]
 }
 
+# Python tooling that Debian does not package, or not at a useful version.
+# Kept sorted; joined into one space-separated string where it is passed in,
+# like PACKAGES.
+variable "PIP_PACKAGES" {
+  type = list(string)
+  default = [
+    "antsibull-changelog",
+    "molecule",
+  ]
+}
+
 target "common" {
   args = {
     PACKAGES = join(" ", PACKAGES)
+    PIP_PACKAGES = join(" ", PIP_PACKAGES)
   }
 
   platforms = LOCAL ? [] : ["linux/amd64", "linux/arm64"]
