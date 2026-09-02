@@ -16,6 +16,18 @@ jobs:
       pull-requests: write
 
     steps:
+      # A pull request opened with the default GITHUB_TOKEN triggers no
+      # pull_request or push events, so under branch protection it would carry
+      # no labels and no required check and could never be merged. An App token
+      # is attributed to the App rather than to this workflow, so the events
+      # fire.
+      - name: mint a token for the pull request
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.CLOUDYHOME_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.CLOUDYHOME_BOT_PRIVATE_KEY }}
+
       - name: checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -52,12 +64,24 @@ jobs:
             echo 'BUMP_BODY'
           } >> "${GITHUB_OUTPUT}"
 
+          # One label per bumped agent, which is what decides the images the
+          # build publishes once this is merged. Newline separated, because the
+          # path rules in .github/labeler.yml deliberately skip this branch and
+          # these labels are all it will carry.
+          {
+            echo 'labels<<BUMP_LABELS'
+            awk '{ print $1 }' "${BUMP_LOG}"
+            echo 'BUMP_LABELS'
+          } >> "${GITHUB_OUTPUT}"
+
       - name: create pr
         if: steps.update.outputs.subject != ''
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
+          token: ${{ steps.app-token.outputs.token }}
           sign-commits: true
           commit-message: ${{ steps.update.outputs.subject }}
           title: ${{ steps.update.outputs.subject }}
           body: ${{ steps.update.outputs.body }}
+          labels: ${{ steps.update.outputs.labels }}
           branch: chore/bump-agent-versions
