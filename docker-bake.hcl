@@ -47,8 +47,6 @@ function "agent_version" {
 variable "PACKAGES" {
   type = list(string)
   default = [
-    "ansible",
-    "ansible-lint",
     "bash",
     "build-essential", # cgo, native pip wheels, node-gyp
     "ca-certificates",
@@ -70,14 +68,20 @@ variable "PACKAGES" {
   ]
 }
 
-# Python tooling that Debian does not package, or not at a useful version.
+# Python tooling, installed into one shared venv. Ansible is here rather than in
+# PACKAGES so its version is pinnable here instead of being whatever Debian
+# ships, and so molecule resolves against the same ansible-core it will run.
 # Kept sorted; joined into one space-separated string where it is passed in,
 # like PACKAGES.
 variable "PIP_PACKAGES" {
   type = list(string)
   default = [
+    "ansible", # the community bundle, not just ansible-core
+    "ansible-lint",
     "antsibull-changelog",
     "molecule",
+    # The driver only; `molecule test` additionally needs a podman binary,
+    # which the image deliberately does not carry.
     "molecule-plugins[podman]",
   ]
 }

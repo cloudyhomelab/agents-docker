@@ -38,14 +38,14 @@ FROM base AS python
 ARG PIP_PACKAGES
 
 # A venv rather than a system-wide pip install: Debian marks its interpreter
-# externally managed, so pip refuses to touch it. --system-site-packages lets
-# these tools import the apt-installed ansible instead of resolving a second
-# copy of ansible-core into the venv.
+# externally managed, so pip refuses to touch it. One venv for the whole list,
+# so molecule and its driver share an interpreter with the ansible-core they
+# drive rather than resolving a second copy of it.
 ENV VIRTUAL_ENV="/opt/venv"
 # set -f, because the list is deliberately unquoted to word-split and an extra
 # such as molecule-plugins[podman] is also a valid glob pattern.
 RUN set -f \
-    && python3 -m venv --system-site-packages "${VIRTUAL_ENV}" \
+    && python3 -m venv "${VIRTUAL_ENV}" \
     && "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip \
     && "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir ${PIP_PACKAGES} \
     && chmod -R a+rX "${VIRTUAL_ENV}"

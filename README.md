@@ -19,8 +19,9 @@ One image per agent, tagged `latest` and with the agent CLI's own version
 so the image does not have to be matched to the project:
 
 - JDK 8, 11, 17, 21, 25 and 26 (Zulu, with JavaFX) plus Maven
-- Python 3 with `pip`, `venv`, `ansible` and `ansible-lint`, plus `molecule`
-  and `antsibull-changelog` in a venv on `PATH`
+- Python 3 with `pip` and `venv`, plus a venv on `PATH` carrying `ansible`,
+  `ansible-lint`, `antsibull-changelog` and `molecule` (with the podman driver;
+  `molecule test` needs a `podman` binary, which the image does not carry)
 - Go
 - Node.js and npm
 
