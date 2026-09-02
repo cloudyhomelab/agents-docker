@@ -42,7 +42,10 @@ ARG PIP_PACKAGES
 # these tools import the apt-installed ansible instead of resolving a second
 # copy of ansible-core into the venv.
 ENV VIRTUAL_ENV="/opt/venv"
-RUN python3 -m venv --system-site-packages "${VIRTUAL_ENV}" \
+# set -f, because the list is deliberately unquoted to word-split and an extra
+# such as molecule-plugins[podman] is also a valid glob pattern.
+RUN set -f \
+    && python3 -m venv --system-site-packages "${VIRTUAL_ENV}" \
     && "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip \
     && "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir ${PIP_PACKAGES} \
     && chmod -R a+rX "${VIRTUAL_ENV}"

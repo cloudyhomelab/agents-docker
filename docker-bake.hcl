@@ -78,6 +78,7 @@ variable "PIP_PACKAGES" {
   default = [
     "antsibull-changelog",
     "molecule",
+    "molecule-plugins[podman]",
   ]
 }
 
