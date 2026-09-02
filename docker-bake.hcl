@@ -69,20 +69,22 @@ variable "PACKAGES" {
 }
 
 # Python tooling, installed into one shared venv. Ansible is here rather than in
-# PACKAGES so its version is pinnable here instead of being whatever Debian
+# PACKAGES so its version is ours to choose instead of being whatever Debian
 # ships, and so molecule resolves against the same ansible-core it will run.
+# Every entry is pinned, so rebuilding an old tag reproduces its toolchain
+# rather than picking up whatever pip resolves that day.
 # Kept sorted; joined into one space-separated string where it is passed in,
 # like PACKAGES.
 variable "PIP_PACKAGES" {
   type = list(string)
   default = [
-    "ansible", # the community bundle, not just ansible-core
-    "ansible-lint",
-    "antsibull-changelog",
-    "molecule",
+    "ansible==14.3.1", # the community bundle, not just ansible-core
+    "ansible-lint==26.8.0",
+    "antsibull-changelog==0.35.1",
+    "molecule==26.8.0",
     # The driver only; `molecule test` additionally needs a podman binary,
     # which the image deliberately does not carry.
-    "molecule-plugins[podman]",
+    "molecule-plugins[podman]==26.7.15",
   ]
 }
 
