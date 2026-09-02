@@ -1,0 +1,84 @@
+name: verify pull request
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Intended as the required status check, so the job itself always runs and
+  # decides internally whether there is anything to build. A skipped job never
+  # reports a status and would leave every pull request waiting forever.
+  verify:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Skipped on the bump branch, which labels itself with only the agents it
+      # bumped; the path rules would widen that to all three.
+      - name: label the agents this pull request affects
+        id: labeler
+        if: github.head_ref != 'chore/bump-agent-versions'
+        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
+
+      - name: select agents
+        id: select
+        env:
+          # The labeler's own view when it ran, and the labels already on the
+          # pull request when it did not -- the bump branch's case.
+          LABELS: >-
+            ${{ steps.labeler.outputs.all-labels
+                || join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+
+          # Filtered against the known agents, so an unrelated label such as
+          # dependencies can never become a build target.
+          agents=""
+          for label in ${LABELS//,/ }; do
+            case "${label}" in
+              claude | codex | gemini) agents="${agents:+${agents},}${label}" ;;
+            esac
+          done
+
+          if [[ -z ${agents} ]]; then
+            echo "no agent labels; nothing to verify"
+          else
+            echo "verifying: ${agents}"
+          fi
+          echo "agents=${agents}" >> "${GITHUB_OUTPUT}"
+
+      - name: set up docker buildx
+        if: steps.select.outputs.agents != ''
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        with:
+          driver: docker-container
+
+      # Proves the toolchain and agent CLI versions actually install before they
+      # reach main. push is false, and LOCAL drops the second platform: this is
+      # a smoke test, not a release.
+      - name: build without publishing
+        if: steps.select.outputs.agents != ''
+        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
+        env:
+          BUILD_AGENTS: ${{ steps.select.outputs.agents }}
+          LOCAL: true
+        with:
+          targets: default
+          push: false
+          # Reads main's cache but writes none: a pull request's cache is scoped
+          # to its own branch, so writing it would only burn the quota.
+          set: |
+            *.cache-from=type=gha

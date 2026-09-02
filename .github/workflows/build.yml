@@ -7,12 +7,9 @@ on:
         description: "Agents to build (comma-separated)"
         type: string
         default: "claude,codex,gemini"
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - ".github/**"
-      - "README.md"
+  pull_request:
+    types:
+      - closed
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,6 +19,9 @@ env:
 
 jobs:
   build:
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     permissions:
@@ -31,18 +31,42 @@ jobs:
     steps:
       - name: checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit, not the pull request head: a squash merge leaves
+          # the head off main entirely and its branch is often deleted, so the
+          # default ref would publish something that was never on main.
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.ref }}
 
-      - name: detect changed agents
-        id: detect
+      # The merged pull request states which images it affects, rather than this
+      # workflow inferring it from a diff -- a rebase merge leaves only the last
+      # commit in HEAD~1..HEAD and used to publish the wrong subset.
+      - name: select agents
+        id: select
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          DISPATCH_AGENTS: ${{ inputs.agents }}
         run: |
-          changed=$(git diff HEAD~1 HEAD -- docker-bake.hcl \
-            | grep '^+variable' \
-            | grep -oP '(?<=")(CLAUDE|CODEX|GEMINI)(?=_VERSION")' \
-            | tr '[:upper:]' '[:lower:]' \
-            | tr '\n' ',' | sed 's/,$//')
-          echo "agents=${changed:-claude,codex,gemini}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+
+          # Filtered against the known agents, so an unrelated label such as
+          # dependencies can never become a build target.
+          agents=""
+          candidates="${DISPATCH_AGENTS:-${LABELS}}"
+          for label in ${candidates//,/ }; do
+            case "${label}" in
+              claude | codex | gemini) agents="${agents:+${agents},}${label}" ;;
+            esac
+          done
+
+          if [[ -z ${agents} ]]; then
+            echo "no agent labels on this pull request; nothing to publish"
+          else
+            echo "publishing: ${agents}"
+          fi
+          echo "agents=${agents}" >> "${GITHUB_OUTPUT}"
 
       - name: login to docker hub
+        if: steps.select.outputs.agents != ''
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
@@ -50,15 +74,17 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: set up docker buildx
+        if: steps.select.outputs.agents != ''
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
         with:
           driver: docker-container
 
       - name: build and push
+        if: steps.select.outputs.agents != ''
         id: bake
         uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         env:
-          BUILD_AGENTS: ${{ inputs.agents || steps.detect.outputs.agents }}
+          BUILD_AGENTS: ${{ steps.select.outputs.agents }}
         with:
           targets: default
           push: true
@@ -69,9 +95,11 @@ jobs:
             *.attest=type=sbom,generator=docker/scout-sbom-indexer:latest
 
       - name: install cosign
+        if: steps.select.outputs.agents != ''
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: sign published image(s) (keyless)
+        if: steps.select.outputs.agents != ''
         run: |
           set -euo pipefail
 

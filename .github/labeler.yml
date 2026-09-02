@@ -1,0 +1,29 @@
+---
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Labels decide which images a pull request builds, both before and after the
+# merge. The rule is stated as exclusions so that a path nobody thought about
+# defaults to building everything rather than to building nothing: a new
+# top-level file is a build input until it is listed here.
+#
+# all-globs-to-any-file means "some changed file matches every one of these
+# globs", so the labels land whenever at least one file falls outside the set
+# below. A Dockerfile change accompanied by a README tweak still builds; a
+# README-only change does not.
+#
+# Only ever all three or none. Which agent a docker-bake.hcl edit affects is a
+# question about lines rather than paths, so the version bump pull request
+# labels itself instead and .github/workflows/pr.yml skips it here.
+claude: &build-inputs
+  - all:
+      - changed-files:
+          - all-globs-to-any-file:
+              - "!.github/**"
+              - "!docs/**"
+              - "!shell-helper/**"
+              - "!README.md"
+              - "!LICENSE"
+codex: *build-inputs
+gemini: *build-inputs
