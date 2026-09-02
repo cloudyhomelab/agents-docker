@@ -23,6 +23,9 @@ jobs:
         id: update
         env:
           BUMP_LOG: ${{ runner.temp }}/bumps.txt
+          # Lifts the release check off the anonymous api.github.com rate limit,
+          # which is shared per IP with every other runner.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 

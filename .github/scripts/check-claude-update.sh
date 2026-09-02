@@ -4,8 +4,30 @@ set -euo pipefail
 
 CLAUDE_VERSION_VAR_NAME="CLAUDE_VERSION"
 CLAUDE_VERSION_CHECK_URL="https://api.github.com/repos/anthropics/claude-code/releases/latest"
+
 LATEST_JSON_FILE=$(mktemp)
-curl -fssL "${CLAUDE_VERSION_CHECK_URL}" --output "${LATEST_JSON_FILE}"
+trap 'rm -f "${LATEST_JSON_FILE}"' EXIT
+
+# Authenticated whenever a token is around: the anonymous api.github.com limit
+# is per IP and shared with every other Actions runner, so an unauthenticated
+# check works most days and 403s the rest.
+GITHUB_TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+if [[ -n ${GITHUB_TOKEN} ]]; then
+  AUTH_CONFIG="header = \"Authorization: Bearer ${GITHUB_TOKEN}\""
+else
+  AUTH_CONFIG=""
+  echo "no GITHUB_TOKEN or GH_TOKEN; falling back to the anonymous rate limit" >&2
+fi
+
+# The token goes in via --config on stdin, not as a -H flag, to keep it out of
+# the process list; an empty config is fine and simply sends no header. -S as
+# well as -f, because -f alone reports a 403 as a bare exit code with no hint
+# of which limit was hit.
+curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    --config - --output "${LATEST_JSON_FILE}" "${CLAUDE_VERSION_CHECK_URL}" \
+    <<<"${AUTH_CONFIG}"
 
 LATEST_VERSION=$(jq -r '.tag_name | ltrimstr("v")' "${LATEST_JSON_FILE}")
 CURRENT_VERSION=$(
