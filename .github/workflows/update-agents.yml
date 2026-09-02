@@ -75,6 +75,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: create pr
+        id: create-pr
         if: steps.update.outputs.subject != ''
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
@@ -85,3 +86,17 @@ jobs:
           body: ${{ steps.update.outputs.body }}
           labels: ${{ steps.update.outputs.labels }}
           branch: chore/bump-agent-versions
+
+      # Merges itself once the required checks pass, so an agent release reaches
+      # the published images without anyone having to click. The pre-merge build
+      # in pr.yml is what makes that safe: a version that does not install
+      # cannot satisfy the check and the pull request simply stays open.
+      #
+      # Only on 'created', because the branch is reused night after night and
+      # auto-merge is already armed on an 'updated' pull request.
+      - name: enable auto-merge
+        if: steps.create-pr.outputs.pull-request-operation == 'created'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ steps.create-pr.outputs.pull-request-number }}
+        run: gh pr merge --auto --squash "${PR}"
