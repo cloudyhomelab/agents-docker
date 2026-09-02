@@ -11,6 +11,13 @@ set -euo pipefail
 
 BAKE_FILE="docker-bake.hcl"
 
+fail() {
+  echo "check-updates: $*" >&2
+  exit 1
+}
+
+[[ -f ${BAKE_FILE} ]] || fail "no ${BAKE_FILE} here; run this from the repository root"
+
 # One row per pinned version: the docker-bake.hcl variable, where to look up
 # the current release, and which project to look up. The label used in output
 # and in the bump log is the variable name lowercased without its _VERSION
@@ -71,9 +78,18 @@ latest_version() {
   esac
 }
 
+# Anchored on "^variable", so this agrees with the rewrite below; unanchored, a
+# comment mentioning the variable would be read here and skipped there.
 current_version() {
   awk -F'"' -v var="$1" \
-    '$0 ~ "variable \"" var "\"" {print $4}' "${BAKE_FILE}"
+    '$0 ~ "^variable \"" var "\"" {print $4}' "${BAKE_FILE}"
+}
+
+# A bare dotted version and nothing else. Everything this rejects -- an empty
+# parse, jq's "null" for a missing key, an error page, "npm ERR!" -- used to be
+# written into the pin or silently rewrite nothing at all.
+is_version() {
+  [[ $1 =~ ^[0-9]+(\.[0-9]+){1,3}([-+][0-9A-Za-z.-]+)?$ ]]
 }
 
 bump_version() {
@@ -96,10 +112,16 @@ for check in "${CHECKS[@]}"; do
   label="${label,,}"
 
   if ! latest=$(latest_version "${source}" "${project}"); then
-    echo "${label} - could not determine the latest version" >&2
-    exit 1
+    fail "${label} - could not determine the latest version"
   fi
+  is_version "${latest}" \
+    || fail "${label} - upstream gave '${latest}', which is not a version"
+
   current=$(current_version "${variable}")
+  [[ ${current} != *$'\n'* ]] \
+    || fail "${label} - ${variable} is pinned on more than one line in ${BAKE_FILE}"
+  is_version "${current}" \
+    || fail "${label} - read '${current}' as the current ${variable}; has ${BAKE_FILE} been reformatted?"
 
   echo "${label} - current version - ${current} ... latest version - ${latest}"
 
@@ -109,6 +131,13 @@ for check in "${CHECKS[@]}"; do
   fi
 
   bump_version "${variable}" "${current}" "${latest}"
+
+  # The rewrite is a regex over one line: a miss would leave the pin untouched
+  # while the run still reported success, which is how the pins would quietly
+  # freeze.
+  written=$(current_version "${variable}")
+  [[ ${written} == "${latest}" ]] \
+    || fail "${label} - ${variable} still reads '${written}' after the rewrite"
 
   # Recorded so the workflow can name what moved in the commit message and PR
   # body; discarded by default, because a local run has nothing to tell.
