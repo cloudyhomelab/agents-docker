@@ -21,6 +21,14 @@ RUN apt-get update \
 
 RUN useradd -m -s /bin/bash agent
 
+# Created here, owned by agent, because a run mounts a named volume onto it:
+# Docker seeds a new volume from the image's directory, ownership included, but
+# only when that directory exists -- otherwise it creates the mount point itself
+# as root and the agent cannot write to its own cache. The same applies to the
+# toolchain and CLI config directories, each created in the stage that owns it.
+# This one stays here: go, npm and pip all share it.
+RUN install -d -o agent -g agent /home/agent/.cache
+
 
 #====================
 # install go
@@ -41,6 +49,8 @@ ENV GOROOT="/usr/local/go"
 # GOPATH keeps its default of ${HOME}/go, so a mounted home volume also caches
 # modules and `go install` binaries between runs.
 ENV PATH="${GOROOT}/bin:/home/agent/go/bin:${PATH}"
+
+RUN install -d -o agent -g agent /home/agent/go
 
 
 #====================
@@ -91,11 +101,15 @@ RUN mkdir -p /opt/java \
 ENV M2_HOME="${SDKMAN_DIR}/candidates/maven/current"
 ENV PATH="${M2_HOME}/bin:${PATH}"
 
+RUN install -d -o agent -g agent /home/agent/.m2
+
 # Global npm installs the agent does at run time land in its home, where it has
 # write access; the CLIs below are installed to /usr/local with an explicit
 # --prefix so they stay out of the home volume.
 ENV NPM_CONFIG_PREFIX=/home/agent/.npm-global
 ENV PATH="/home/agent/.npm-global/bin:${PATH}"
+
+RUN install -d -o agent -g agent /home/agent/.npm-global
 
 COPY --chmod=0755 scripts/agent-entrypoint /usr/local/bin/agent-entrypoint
 ENTRYPOINT ["/usr/local/bin/agent-entrypoint"]
@@ -113,6 +127,8 @@ RUN HOME=/opt/claude bash -o pipefail -c 'curl -fsSL --retry 5 --retry-all-error
     && ln -s /opt/claude/.local/bin/claude /usr/local/bin/claude \
     && chmod -R a+rX /opt/claude
 
+RUN install -d -o agent -g agent /home/agent/.claude
+
 USER agent
 WORKDIR /home/agent
 CMD ["claude"]
@@ -126,6 +142,8 @@ ARG CODEX_VERSION
 
 RUN npm install -g --prefix /usr/local @openai/codex@"${CODEX_VERSION}"
 
+RUN install -d -o agent -g agent /home/agent/.codex
+
 USER agent
 WORKDIR /home/agent
 CMD ["codex"]
@@ -138,6 +156,8 @@ FROM jdk AS gemini
 ARG GEMINI_VERSION
 
 RUN npm install -g --prefix /usr/local @google/gemini-cli@"${GEMINI_VERSION}"
+
+RUN install -d -o agent -g agent /home/agent/.gemini
 
 USER agent
 WORKDIR /home/agent
