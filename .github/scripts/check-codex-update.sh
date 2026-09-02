@@ -21,4 +21,9 @@ else
     { print }
   ' docker-bake.hcl > docker-bake.hcl.tmp
   mv docker-bake.hcl.tmp docker-bake.hcl
+
+  # Recorded so the workflow can name what moved in the commit message and PR
+  # body; discarded by default, because a local run has nothing to tell.
+  printf '%s %s %s\n' "codex" "${CURRENT_VERSION}" "${LATEST_VERSION}" \
+    >> "${BUMP_LOG:-/dev/null}"
 fi
