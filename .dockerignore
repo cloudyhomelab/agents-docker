@@ -1,0 +1,4 @@
+# Dockerfile is listed because buildx sends it outside the context, but a plain `docker build` reads it from within.
+*
+!Dockerfile
+!scripts
