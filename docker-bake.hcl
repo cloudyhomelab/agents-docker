@@ -71,8 +71,9 @@ variable "PACKAGES" {
 # Python tooling, installed into one shared venv. Ansible is here rather than in
 # PACKAGES so its version is ours to choose instead of being whatever Debian
 # ships, and so molecule resolves against the same ansible-core it will run.
-# Every entry is pinned, so rebuilding an old tag reproduces its toolchain
-# rather than picking up whatever pip resolves that day.
+# Every entry is pinned, so rebuilding an old tag gets the same pip versions
+# rather than whatever pip resolves that day. The apt packages in PACKAGES are
+# deliberately not pinned, so the image as a whole is not reproducible.
 # Kept sorted; joined into one space-separated string where it is passed in,
 # like PACKAGES.
 variable "PIP_PACKAGES" {

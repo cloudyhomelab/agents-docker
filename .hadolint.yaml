@@ -1,0 +1,7 @@
+---
+ignored:
+  # Debian drops superseded binaries from the archive, so a pinned apt version
+  # stops installing altogether once a point release lands. The toolchains a
+  # project actually cares about -- the JDKs, Go, the pip tools -- are pinned
+  # where they are installed instead.
+  - DL3008
