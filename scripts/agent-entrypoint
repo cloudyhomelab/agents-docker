@@ -7,13 +7,21 @@ set -euo pipefail
 
 java_dir="/opt/java"
 
+# Each file is parsed rather than merely probed for: a .sdkmanrc that sets only
+# other candidates must not shadow a .java-version sitting beside it.
 resolve_project_version() {
+    local version=""
+
     if [[ -f .sdkmanrc ]]; then
-        sed -n 's/^[[:space:]]*java=\([0-9][0-9]*\).*/\1/p' .sdkmanrc | head -n 1
-    elif [[ -f .java-version ]]; then
-        # Accepts both "21" and vendor strings such as "21.0.10.fx-zulu".
-        sed -n 's/^[[:space:]]*\([0-9][0-9]*\).*/\1/p' .java-version | head -n 1
+        version=$(sed -n 's/^[[:space:]]*java=\([0-9][0-9]*\).*/\1/p' .sdkmanrc | head -n 1)
     fi
+
+    if [[ -z ${version} && -f .java-version ]]; then
+        # Accepts both "21" and vendor strings such as "21.0.10.fx-zulu".
+        version=$(sed -n 's/^[[:space:]]*\([0-9][0-9]*\).*/\1/p' .java-version | head -n 1)
+    fi
+
+    printf '%s' "${version}"
 }
 
 requested="${JAVA_VERSION:-}"
