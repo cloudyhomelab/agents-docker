@@ -26,6 +26,14 @@ jobs:
       - name: checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Deliberately not gated on the labels below: a Dockerfile the linter
+      # rejects should fail the check even when no image is due to be built.
+      - name: lint the dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Dockerfile
+          config: .hadolint.yaml
+
       # Skipped on the bump branch, which labels itself with only the agents it
       # bumped; the path rules would widen that to all three.
       - name: label the agents this pull request affects
