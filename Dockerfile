@@ -12,6 +12,8 @@ ARG PIP_PACKAGES
 #====================
 # base layer
 #====================
+# A floating tag on purpose: a digest pin would hold the base, and its security
+# updates, at whatever was current the day someone last bumped it.
 FROM debian:13-slim AS base
 ARG PACKAGES
 
