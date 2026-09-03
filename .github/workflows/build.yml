@@ -65,6 +65,11 @@ jobs:
           fi
           echo "agents=${agents}" >> "${GITHUB_OUTPUT}"
 
+          # Read back from the checkout rather than from github.sha, which on a
+          # pull_request event is that request's merge ref and not the commit
+          # this job actually publishes.
+          echo "revision=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
           # One cache scope per agent: the images build in parallel and a shared
           # scope makes them race for the same cache reservation, which fails
           # the export for one of them and cancels the rest of the bake.
@@ -97,6 +102,7 @@ jobs:
         uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         env:
           BUILD_AGENTS: ${{ steps.select.outputs.agents }}
+          REVISION: ${{ steps.select.outputs.revision }}
         with:
           targets: default
           push: true

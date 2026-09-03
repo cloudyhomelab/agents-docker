@@ -1,6 +1,11 @@
 variable "REGISTRY" { default = "docker.io" }
 variable "NAMESPACE"  { default = "binarycodes" }
 
+# The commit the image was built from, for the OCI revision label. HCL cannot
+# read git, so the publish workflow passes the sha it checked out; a local build
+# leaves it empty, which is the honest answer for a working tree.
+variable "REVISION" { default = "" }
+
 variable "CLAUDE_VERSION" { default = "2.1.260" }
 variable "CODEX_VERSION" { default = "0.153.2" }
 variable "GEMINI_VERSION" { default = "0.58.0" }
@@ -113,10 +118,15 @@ target "agent" {
 
   name = "${agent}"
 
+  # The provenance attestation carries the source and revision too, but a label
+  # is what `docker inspect` and Docker Hub read.
   labels = {
     "org.opencontainers.image.title"       = "${agent}"
     "org.opencontainers.image.description" = "Docker container to run ${agent} workloads"
     "org.opencontainers.image.version"     = agent_version(agent)
+    "org.opencontainers.image.source"      = "https://github.com/cloudyhomelab/agents-docker"
+    "org.opencontainers.image.revision"    = REVISION
+    "org.opencontainers.image.licenses"    = "GPL-3.0-or-later"
   }
 
   args = {
