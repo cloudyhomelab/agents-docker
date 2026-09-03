@@ -105,8 +105,11 @@ RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
 # it; and the steps are ';'-separated rather than '&&'-chained, because errexit
 # is suppressed inside a compound command that is part of an AND list -- there a
 # failed `sdk install` is swallowed and the image ships a JDK short.
+# No -f, despite the unquoted list: sdkman moves the unzipped JDK into place
+# with an unquoted glob and returns 0 regardless, so noglob installs nothing
+# and says it succeeded.
 RUN bash -c 'source "${SDKMAN_DIR}/bin/sdkman-init.sh"; \
-    set -ef; \
+    set -e; \
     for version in ${JAVA_VERSIONS}; do sdk install java "${version}"; done; \
     sdk install maven'
 
@@ -114,8 +117,7 @@ RUN bash -c 'source "${SDKMAN_DIR}/bin/sdkman-init.sh"; \
 # not the full "21.0.10.fx-zulu" vendor string.
 # Every target is checked, because ln -s happily creates a dangling link and the
 # breakage would only surface at run time, inside someone's session.
-RUN set -f \
-    && mkdir -p /opt/java \
+RUN mkdir -p /opt/java \
     && for version in ${JAVA_VERSIONS}; do \
          candidate="${SDKMAN_DIR}/candidates/java/${version}"; \
          test -d "${candidate}" || { echo "missing JDK: ${candidate}" >&2; exit 1; }; \
