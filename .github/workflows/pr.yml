@@ -60,6 +60,15 @@ jobs:
           fi
           echo "agents=${agents}" >> "${GITHUB_OUTPUT}"
 
+          # Matches the scopes the publish workflow writes, one per agent.
+          {
+            echo "cache<<CACHE_EOF"
+            for agent in ${agents//,/ }; do
+              echo "${agent}.cache-from=type=gha,scope=${agent}"
+            done
+            echo "CACHE_EOF"
+          } >> "${GITHUB_OUTPUT}"
+
       - name: set up docker buildx
         if: steps.select.outputs.agents != ''
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
@@ -81,4 +90,4 @@ jobs:
           # Reads main's cache but writes none: a pull request's cache is scoped
           # to its own branch, so writing it would only burn the quota.
           set: |
-            *.cache-from=type=gha
+            ${{ steps.select.outputs.cache }}
