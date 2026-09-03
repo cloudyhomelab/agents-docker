@@ -19,11 +19,8 @@ env:
 
 jobs:
   build:
-    # The base branch is checked as well as the merge: these tags are the
-    # published ones, and a pull request merged into a topic branch would
-    # otherwise move :latest to something that never landed on the default
-    # branch. A dispatch is someone asking for it explicitly, so it stands on
-    # its own.
+    # closed fires whatever the base branch, so without the base.ref check a
+    # topic-branch merge would move :latest.
     if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.base.ref == github.event.repository.default_branch)
     runs-on: ubuntu-latest
 

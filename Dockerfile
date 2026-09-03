@@ -16,13 +16,8 @@ FROM debian:13-slim AS base
 ARG PACKAGES
 
 ENV DEBIAN_FRONTEND=noninteractive
-# set -f around the install, because PACKAGES is deliberately unquoted to
-# word-split. A package name itself cannot contain glob characters, but an apt
-# argument is not always a bare name -- apt also takes its own patterns, such
-# as linux-headers-* -- and one of those would be matched against the
-# filesystem by the shell before apt ever saw it. Nothing in the list needs
-# this today; it is here so adding such an entry cannot go quietly wrong.
-# Globbing goes back on for the cleanup, which needs it.
+# -f so an apt pattern such as linux-headers-* is not filesystem-matched before
+# apt sees it; +f again for the cleanup glob.
 RUN set -f \
     && apt-get update \
     && apt-get install -y --no-install-recommends ${PACKAGES} \
@@ -109,8 +104,7 @@ RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
 # set -e only after sourcing, since sdkman-init.sh is not written to run under
 # it; and the steps are ';'-separated rather than '&&'-chained, because errexit
 # is suppressed inside a compound command that is part of an AND list -- there a
-# failed `sdk install` is swallowed and the image ships a JDK short. The -f is
-# for the unquoted JAVA_VERSIONS expansion, as in the base stage's install.
+# failed `sdk install` is swallowed and the image ships a JDK short.
 RUN bash -c 'source "${SDKMAN_DIR}/bin/sdkman-init.sh"; \
     set -ef; \
     for version in ${JAVA_VERSIONS}; do sdk install java "${version}"; done; \
