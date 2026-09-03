@@ -112,6 +112,37 @@ they always come from the image and are refreshed by `--pull always`.
 wrappers: a config volume per CLI, separate volumes per cache, the host Maven
 repository shared, and `<AGENT>_IMAGE_TAG` to pin a published version.
 
+## Verifying the Images
+
+Every published image is signed with [cosign](https://github.com/sigstore/cosign)
+in keyless mode, so there is no public key to distribute -- the signature is tied
+to the workflow run that produced it. Verifying asserts that the image really was
+built by `.github/workflows/build.yml` in this repository:
+
+```bash
+cosign verify \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp \
+    '^https://github\.com/cloudyhomelab/agents-docker/\.github/workflows/build\.yml@refs/' \
+  docker.io/binarycodes/claude:latest
+```
+
+Substitute `codex` or `gemini` for `claude`, and a version tag for `latest`.
+
+The identity is a regular expression that stops at `@refs/` rather than pinning
+one ref, because the ref a run signs under depends on how it was triggered: the
+usual path is a merged pull request, a manual `workflow_dispatch` is not the
+same ref. The repository and the workflow file -- the parts that carry the trust
+-- are still anchored exactly, and `cosign verify` prints the full identity it
+matched, so pin it further once you have seen what your tag actually carries.
+
+The build also attaches SBOM and provenance attestations, which say what went
+into the image rather than who built it:
+
+```bash
+docker buildx imagetools inspect docker.io/binarycodes/claude:latest
+```
+
 ## Build Locally
 
 Build all default targets:
