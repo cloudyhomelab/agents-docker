@@ -39,9 +39,11 @@ jobs:
           dockerfile: Dockerfile
           config: .hadolint.yaml
 
+      # The same file list as the pre-commit hook runs, glob included, so a
+      # hook added later is linted without either side being updated.
       # shell-helper/zshrc is not listed: shellcheck has no zsh support.
       - name: lint the shell scripts
-        run: shellcheck .githooks/commit-msg scripts/agent-entrypoint .github/scripts/*.sh
+        run: shellcheck .githooks/* scripts/agent-entrypoint .github/scripts/*.sh
 
       # Skipped on the bump branch, which labels itself with only the agents it
       # bumped; the path rules would widen that to all three.

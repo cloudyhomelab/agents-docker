@@ -172,6 +172,11 @@ Enable the repository's hooks once per clone:
 git config core.hooksPath .githooks
 ```
 
+`pre-commit` then runs the same `shellcheck` and `hadolint` checks the pull
+request workflow does, and `commit-msg` checks the message against the
+conventions above. Neither linter is required locally -- one that is not
+installed is reported and skipped, and CI remains the enforcement point.
+
 ## License
 
 Copyright (c) 2026 binarycodes
