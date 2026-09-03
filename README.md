@@ -164,6 +164,14 @@ Print the resolved build plan:
 docker buildx bake --print
 ```
 
+## Contributing
+
+Enable the repository's hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## License
 
 Copyright (c) 2026 binarycodes
