@@ -24,15 +24,19 @@ RUN set -f \
     && set +f \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m -s /bin/bash agent
-
-# Created here, owned by agent, because a run mounts a named volume onto it:
-# Docker seeds a new volume from the image's directory, ownership included, but
-# only when that directory exists -- otherwise it creates the mount point itself
-# as root and the agent cannot write to its own cache. The same applies to the
-# toolchain and CLI config directories, each created in the stage that owns it.
-# This one stays here: go, npm and pip all share it.
-RUN install -d -o agent -g agent /home/agent/.cache
+# 1000:1000 explicitly, because a bind-mounted workspace carries the host's
+# ownership: the files an agent writes come back out belonging to the person
+# who started it.
+#
+# .cache is created here, owned by agent, because a run mounts a named volume
+# onto it: Docker seeds a new volume from the image's directory, ownership
+# included, but only when that directory exists -- otherwise it creates the
+# mount point itself as root and the agent cannot write to its own cache. The
+# same applies to the toolchain and CLI config directories, each created in the
+# stage that owns it. This one stays here: go, npm and pip all share it.
+RUN groupadd -g 1000 agent \
+    && useradd -m -u 1000 -g 1000 -s /bin/bash agent \
+    && install -d -o agent -g agent /home/agent/.cache
 
 
 #====================
@@ -157,11 +161,10 @@ ARG CLAUDE_VERSION
 # a throwaway HOME relocates the whole install out of the agent's home volume.
 RUN HOME=/opt/claude bash -o pipefail -c 'curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "https://claude.ai/install.sh" | bash -s "${CLAUDE_VERSION}"' \
     && ln -s /opt/claude/.local/bin/claude /usr/local/bin/claude \
-    && chmod -R a+rX /opt/claude
+    && chmod -R a+rX /opt/claude \
+    && install -d -o agent -g agent /home/agent/.claude
 
-RUN install -d -o agent -g agent /home/agent/.claude
-
-USER agent
+USER 1000
 WORKDIR /home/agent
 CMD ["claude"]
 
@@ -172,11 +175,10 @@ CMD ["claude"]
 FROM jdk AS codex
 ARG CODEX_VERSION
 
-RUN npm install -g --prefix /usr/local @openai/codex@"${CODEX_VERSION}"
+RUN npm install -g --prefix /usr/local @openai/codex@"${CODEX_VERSION}" \
+    && install -d -o agent -g agent /home/agent/.codex
 
-RUN install -d -o agent -g agent /home/agent/.codex
-
-USER agent
+USER 1000
 WORKDIR /home/agent
 CMD ["codex"]
 
@@ -187,10 +189,9 @@ CMD ["codex"]
 FROM jdk AS gemini
 ARG GEMINI_VERSION
 
-RUN npm install -g --prefix /usr/local @google/gemini-cli@"${GEMINI_VERSION}"
+RUN npm install -g --prefix /usr/local @google/gemini-cli@"${GEMINI_VERSION}" \
+    && install -d -o agent -g agent /home/agent/.gemini
 
-RUN install -d -o agent -g agent /home/agent/.gemini
-
-USER agent
+USER 1000
 WORKDIR /home/agent
 CMD ["gemini"]
