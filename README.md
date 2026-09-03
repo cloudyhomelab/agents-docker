@@ -131,3 +131,12 @@ Print the resolved build plan:
 ```bash
 docker buildx bake --print
 ```
+
+## License
+
+Copyright (c) 2026 binarycodes
+
+This project is licensed under the GNU General Public License v3.0 or later.
+See [LICENSE](LICENSE), or <https://www.gnu.org/licenses/gpl-3.0.txt>.
+
+SPDX-License-Identifier: `GPL-3.0-or-later`
