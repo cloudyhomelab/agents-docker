@@ -114,6 +114,10 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Interpolated rather than passed through env:, which failed in
+          # 432b779 with "Argument list too long" -- the metadata does not fit
+          # in the environment the runner starts bash with.
+
           cat > bake-metadata.json <<'JSON'
           ${{ steps.bake.outputs.metadata }}
           JSON
