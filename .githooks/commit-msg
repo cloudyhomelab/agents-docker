@@ -7,7 +7,6 @@
 #   * no Co-Authored-By trailers
 #
 # Enabled via:  git config core.hooksPath .githooks
-# See CODING_CONVENTIONS.md ("Git").
 
 message_file="$1"
 
