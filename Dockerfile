@@ -1,3 +1,7 @@
+# Declarations only -- no FROM interpolates these and every stage redeclares
+# what it uses. They are here because one bake target passes all three agent
+# versions to every agent build, which reaches just one of the CLI stages, and
+# an arg no reached stage declares is one BuildKit warns about.
 ARG CLAUDE_VERSION
 ARG CODEX_VERSION
 ARG GEMINI_VERSION
