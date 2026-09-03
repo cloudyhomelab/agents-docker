@@ -38,9 +38,7 @@ jobs:
         env:
           # The labeler's own view when it ran, and the labels already on the
           # pull request when it did not -- the bump branch's case.
-          LABELS: >-
-            ${{ steps.labeler.outputs.all-labels
-                || join(github.event.pull_request.labels.*.name, ',') }}
+          LABELS: ${{ steps.labeler.outputs.all-labels || join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           set -euo pipefail
 
