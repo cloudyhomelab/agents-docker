@@ -1,3 +1,7 @@
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Wrappers that run the containerised agent CLIs against a project directory.
 #
 # Source this from ~/.zshrc:

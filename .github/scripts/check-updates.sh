@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Bumps the pinned agent CLI versions in docker-bake.hcl to whatever upstream
 # currently publishes, and records what moved so the calling workflow can name

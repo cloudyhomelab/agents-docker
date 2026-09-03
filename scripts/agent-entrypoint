@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Selects the JDK for this container. The image ships every supported major, so
 # JAVA_HOME cannot be baked into an ENV layer -- it is resolved per run, in
 # order of how explicit the request is: the environment wins, then whatever the

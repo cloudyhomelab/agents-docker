@@ -1,3 +1,7 @@
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Declarations only -- no FROM interpolates these and every stage redeclares
 # what it uses. They are here because one bake target passes all three agent
 # versions to every agent build, which reaches just one of the CLI stages, and

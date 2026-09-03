@@ -179,4 +179,8 @@ Copyright (c) 2026 binarycodes
 This project is licensed under the GNU General Public License v3.0 or later.
 See [LICENSE](LICENSE), or <https://www.gnu.org/licenses/gpl-3.0.txt>.
 
+Every file that supports comments carries the copyright and
+`SPDX-License-Identifier` header; `LICENSE` and this README state it in prose
+instead.
+
 SPDX-License-Identifier: `GPL-3.0-or-later`

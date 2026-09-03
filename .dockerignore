@@ -1,3 +1,7 @@
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Dockerfile is listed because buildx sends it outside the context, but a plain `docker build` reads it from within.
 *
 !Dockerfile
