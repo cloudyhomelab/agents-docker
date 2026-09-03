@@ -177,7 +177,11 @@ CMD ["claude"]
 FROM jdk AS codex
 ARG CODEX_VERSION
 
-RUN npm install -g --prefix /usr/local @openai/codex@"${CODEX_VERSION}" \
+# A cache mount rather than a post-install `npm cache clean`: either keeps the
+# cache out of the layer, but this one survives into the next build. Locked,
+# because the codex and gemini stages install in parallel and share it.
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm install -g --prefix /usr/local @openai/codex@"${CODEX_VERSION}" \
     && install -d -o agent -g agent /home/agent/.codex
 
 USER 1000
@@ -191,7 +195,8 @@ CMD ["codex"]
 FROM jdk AS gemini
 ARG GEMINI_VERSION
 
-RUN npm install -g --prefix /usr/local @google/gemini-cli@"${GEMINI_VERSION}" \
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm install -g --prefix /usr/local @google/gemini-cli@"${GEMINI_VERSION}" \
     && install -d -o agent -g agent /home/agent/.gemini
 
 USER 1000
