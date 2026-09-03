@@ -36,9 +36,15 @@ RUN set -f \
 # mount point itself as root and the agent cannot write to its own cache. The
 # same applies to the toolchain and CLI config directories, each created in the
 # stage that owns it. This one stays here: go, npm and pip all share it.
+#
+# safe.directory, because that same host ownership is what git reads: on a host
+# where the user is not 1000, every git command in the session would refuse the
+# workspace as dubiously owned. --system, so the exemption also covers whichever
+# uid a --user override runs as.
 RUN groupadd -g 1000 agent \
     && useradd -m -u 1000 -g 1000 -s /bin/bash agent \
-    && install -d -o agent -g agent /home/agent/.cache
+    && install -d -o agent -g agent /home/agent/.cache \
+    && git config --system --add safe.directory /workspace
 
 
 #====================
