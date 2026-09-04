@@ -74,14 +74,17 @@ jobs:
           # this job actually publishes.
           echo "revision=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
 
-          # One cache scope per agent: the images build in parallel and a shared
-          # scope makes them race for the same cache reservation, which fails
-          # the export for one of them and cancels the rest of the bake.
+          # One cache scope per agent for the index; the layer blobs are keyed
+          # by digest alone and so shared across scopes. The images build in
+          # parallel from the same base stages, so two targets race to reserve
+          # the same blob and the loser fails with "failed to reserve cache",
+          # which cancels the rest of the bake. ignore-error keeps that a lost
+          # cache write instead of a lost publish; the winner uploads the blob.
           {
             echo "cache<<CACHE_EOF"
             for agent in ${agents//,/ }; do
               echo "${agent}.cache-from=type=gha,scope=${agent}"
-              echo "${agent}.cache-to=type=gha,mode=max,scope=${agent}"
+              echo "${agent}.cache-to=type=gha,mode=max,scope=${agent},ignore-error=true"
             done
             echo "CACHE_EOF"
           } >> "${GITHUB_OUTPUT}"
