@@ -1,11 +1,12 @@
 # Copyright (c) 2026 binarycodes
 # GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
+# shellcheck shell=bash
 
 # Wrappers that run the containerised agent CLIs against a project directory.
 #
-# Source this from ~/.zshrc:
-#     source /path/to/shell-helper/zshrc
+# Source this from ~/.bashrc or ~/.zshrc:
+#     source /path/to/shell-helper/agents.sh
 #
 # Each function shadows a CLI of the same name on PATH, so the container is
 # what runs by default. JAVA_VERSION is forwarded only when set, leaving a
