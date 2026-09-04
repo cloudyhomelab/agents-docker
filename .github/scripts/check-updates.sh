@@ -10,16 +10,12 @@
 # Run from the repository root. Set BUMP_LOG to collect the bumps; a local run
 # can leave it unset and the log is discarded.
 
-set -euo pipefail
-
 BAKE_FILE="docker-bake.hcl"
 
 fail() {
   echo "check-updates: $*" >&2
   exit 1
 }
-
-[[ -f ${BAKE_FILE} ]] || fail "no ${BAKE_FILE} here; run this from the repository root"
 
 # One row per pinned version: the docker-bake.hcl variable, where to look up
 # the current release, and which project to look up. The label used in output
@@ -32,9 +28,6 @@ CHECKS=(
   "CODEX_VERSION       npm-dist-tag     @openai/codex"
   "GEMINI_VERSION      npm-dist-tag     @google/gemini-cli"
 )
-
-SCRATCH=$(mktemp -d)
-trap 'rm -rf "${SCRATCH}"' EXIT
 
 # These are called as $(...), and a function body running inside a command
 # substitution does not honour errexit -- a failed fetch would otherwise fall
@@ -110,41 +103,55 @@ bump_version() {
   mv "${BAKE_FILE}.tmp" "${BAKE_FILE}"
 }
 
-for check in "${CHECKS[@]}"; do
-  # The columns are space-separated, so word splitting is the whole parse.
-  read -r variable source project <<<"${check}"
+main() {
+  set -euo pipefail
+  local check variable source project label latest current written
 
-  label="${variable%_VERSION}"
-  label="${label,,}"
+  [[ -f ${BAKE_FILE} ]] || fail "no ${BAKE_FILE} here; run this from the repository root"
 
-  if ! latest=$(latest_version "${source}" "${project}"); then
-    fail "${label} - could not determine the latest version"
-  fi
-  is_version "${latest}" \
-    || fail "${label} - upstream gave '${latest}', which is not a version"
+  SCRATCH=$(mktemp -d)
+  trap 'rm -rf "${SCRATCH}"' EXIT
 
-  current=$(current_version "${label}" "${variable}")
-  is_version "${current}" \
-    || fail "${label} - read '${current}' as the current ${variable} from ${BAKE_FILE}"
+  for check in "${CHECKS[@]}"; do
+    # The columns are space-separated, so word splitting is the whole parse.
+    read -r variable source project <<<"${check}"
 
-  echo "${label} - current version - ${current} ... latest version - ${latest}"
+    label="${variable%_VERSION}"
+    label="${label,,}"
 
-  if [[ "${current}" == "${latest}" ]]; then
-    echo "${label} - No update found"
-    continue
-  fi
+    if ! latest=$(latest_version "${source}" "${project}"); then
+      fail "${label} - could not determine the latest version"
+    fi
+    is_version "${latest}" \
+      || fail "${label} - upstream gave '${latest}', which is not a version"
 
-  bump_version "${variable}" "${current}" "${latest}"
+    current=$(current_version "${label}" "${variable}")
+    is_version "${current}" \
+      || fail "${label} - read '${current}' as the current ${variable} from ${BAKE_FILE}"
 
-  # The rewrite is a regex over one line: a miss would leave the pin untouched
-  # while the run still reported success, which is how the pins would quietly
-  # freeze.
-  written=$(current_version "${label}" "${variable}")
-  [[ ${written} == "${latest}" ]] \
-    || fail "${label} - ${variable} still reads '${written}' after the rewrite"
+    echo "${label} - current version - ${current} ... latest version - ${latest}"
 
-  # Recorded so the workflow can name what moved in the commit message and PR
-  # body; discarded by default, because a local run has nothing to tell.
-  printf '%s %s %s\n' "${label}" "${current}" "${latest}" \
-    >> "${BUMP_LOG:-/dev/null}"
-done
+    if [[ "${current}" == "${latest}" ]]; then
+      echo "${label} - No update found"
+      continue
+    fi
+
+    bump_version "${variable}" "${current}" "${latest}"
+
+    # The rewrite is a regex over one line: a miss would leave the pin untouched
+    # while the run still reported success, which is how the pins would quietly
+    # freeze.
+    written=$(current_version "${label}" "${variable}")
+    [[ ${written} == "${latest}" ]] \
+      || fail "${label} - ${variable} still reads '${written}' after the rewrite"
+
+    # Recorded so the workflow can name what moved in the commit message and PR
+    # body; discarded by default, because a local run has nothing to tell.
+    printf '%s %s %s\n' "${label}" "${current}" "${latest}" \
+      >> "${BUMP_LOG:-/dev/null}"
+  done
+}
+
+# tests/check-updates.bats sources this file for the functions above; only a
+# direct run checks and bumps.
+[[ ${BASH_SOURCE[0]} != "$0" ]] || main "$@"

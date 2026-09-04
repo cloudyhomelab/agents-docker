@@ -175,6 +175,12 @@ Check that a built image actually runs, as the pull request workflow does:
 These build for the host platform only. The published images are multi-platform,
 that needs a `docker-container` builder and `LOCAL=false` in the environment.
 
+Run the tests for the entrypoint and the update script, which need no image:
+
+```bash
+bats tests
+```
+
 ## Contributing
 
 Enable the repository's hooks once per clone:
@@ -183,9 +189,9 @@ Enable the repository's hooks once per clone:
 git config core.hooksPath .githooks
 ```
 
-`pre-commit` then runs the same `shellcheck` and `hadolint` checks the pull
-request workflow does, and `commit-msg` checks the message against the
-conventions above. Neither linter is required locally -- one that is not
+`pre-commit` then runs the same `shellcheck`, `hadolint` and `bats` checks the
+pull request workflow does, and `commit-msg` checks the message against the
+conventions above. None of the three is required locally -- one that is not
 installed is reported and skipped, and CI remains the enforcement point.
 
 ## License

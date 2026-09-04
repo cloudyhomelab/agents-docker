@@ -45,6 +45,17 @@ jobs:
       - name: lint the shell scripts
         run: shellcheck .githooks/* scripts/agent-entrypoint .github/scripts/*.sh
 
+      # The linters prove the scripts parse; this proves their branches do what
+      # the comments claim -- the entrypoint's JDK resolution order and the
+      # version checks behind the automated bumps -- without building an image.
+      # Ungated like the linters, and from the runner's apt rather than an
+      # action, since bats is a single bash script.
+      - name: test the shell scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bats
+          bats tests
+
       # Skipped on the bump branch, which labels itself with only the agents it
       # bumped; the path rules would widen that to all three.
       - name: label the agents this pull request affects
