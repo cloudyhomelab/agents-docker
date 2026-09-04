@@ -81,11 +81,14 @@ latest_version() {
   esac
 }
 
-# Anchored on "^variable", so this agrees with the rewrite below; unanchored, a
-# comment mentioning the variable would be read here and skipped there.
+# Read back through bake rather than by parsing the HCL, so the pin reported
+# here is exactly what a build would see. Every target carries every version
+# arg; asking the agent's own target just keeps the jq path readable.
 current_version() {
-  awk -F'"' -v var="$1" \
-    '$0 ~ "^variable \"" var "\"" {print $4}' "${BAKE_FILE}"
+  local target="$1" variable="$2"
+
+  docker buildx bake --file "${BAKE_FILE}" --progress=quiet --print \
+    | jq -r --arg variable "${variable}" ".target.${target}.args[\$variable]"
 }
 
 # A bare dotted version and nothing else. Everything this rejects -- an empty
@@ -120,11 +123,9 @@ for check in "${CHECKS[@]}"; do
   is_version "${latest}" \
     || fail "${label} - upstream gave '${latest}', which is not a version"
 
-  current=$(current_version "${variable}")
-  [[ ${current} != *$'\n'* ]] \
-    || fail "${label} - ${variable} is pinned on more than one line in ${BAKE_FILE}"
+  current=$(current_version "${label}" "${variable}")
   is_version "${current}" \
-    || fail "${label} - read '${current}' as the current ${variable}; has ${BAKE_FILE} been reformatted?"
+    || fail "${label} - read '${current}' as the current ${variable} from ${BAKE_FILE}"
 
   echo "${label} - current version - ${current} ... latest version - ${latest}"
 
@@ -138,7 +139,7 @@ for check in "${CHECKS[@]}"; do
   # The rewrite is a regex over one line: a miss would leave the pin untouched
   # while the run still reported success, which is how the pins would quietly
   # freeze.
-  written=$(current_version "${variable}")
+  written=$(current_version "${label}" "${variable}")
   [[ ${written} == "${latest}" ]] \
     || fail "${label} - ${variable} still reads '${written}' after the rewrite"
 
