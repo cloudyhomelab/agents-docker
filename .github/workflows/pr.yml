@@ -16,45 +16,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Intended as the required status check, so the job itself always runs and
-  # decides internally whether there is anything to build. A skipped job never
-  # reports a status and would leave every pull request waiting forever.
-  verify:
+  # Runs once, ahead of the per-platform builds: the labeler writes to the pull
+  # request, and two copies racing on a fresh one could each read the labels
+  # before the other had added them.
+  select:
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
       pull-requests: write
 
+    outputs:
+      agents: ${{ steps.select.outputs.agents }}
+      cache: ${{ steps.select.outputs.cache }}
+
     steps:
       - name: checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # Both linters are deliberately ungated by the labels below: code the
-      # linter rejects should fail the check even when no image is due to be
-      # built.
-      - name: lint the dockerfile
-        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
-        with:
-          dockerfile: Dockerfile
-          config: .hadolint.yaml
-
-      # The same file list as the pre-commit hook runs, glob included, so a
-      # hook added later is linted without either side being updated.
-      # shell-helper/zshrc is not listed: shellcheck has no zsh support.
-      - name: lint the shell scripts
-        run: shellcheck .githooks/* scripts/agent-entrypoint .github/scripts/*.sh
-
-      # The linters prove the scripts parse; this proves their branches do what
-      # the comments claim -- the entrypoint's JDK resolution order and the
-      # version checks behind the automated bumps -- without building an image.
-      # Ungated like the linters, and from the runner's apt rather than an
-      # action, since bats is a single bash script.
-      - name: test the shell scripts
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends bats
-          bats tests
 
       # Skipped on the bump branch, which labels itself with only the agents it
       # bumped; the path rules would widen that to all three.
@@ -88,7 +66,9 @@ jobs:
           fi
           echo "agents=${agents}" >> "${GITHUB_OUTPUT}"
 
-          # Matches the scopes the publish workflow writes, one per agent.
+          # Matches the scopes the publish workflow writes, one per agent. Each
+          # scope holds both platforms' layers, so the arm64 build reads the
+          # same one.
           {
             echo "cache<<CACHE_EOF"
             for agent in ${agents//,/ }; do
@@ -97,8 +77,73 @@ jobs:
             echo "CACHE_EOF"
           } >> "${GITHUB_OUTPUT}"
 
+  # Deliberately ungated by the labels: code the linters reject should fail
+  # the check even when no image is due to be built.
+  lint:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: lint the dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Dockerfile
+          config: .hadolint.yaml
+
+      # The same file list as the pre-commit hook runs, glob included, so a
+      # hook added later is linted without either side being updated.
+      # shell-helper/zshrc is not listed: shellcheck has no zsh support.
+      - name: lint the shell scripts
+        run: shellcheck .githooks/* scripts/agent-entrypoint .github/scripts/*.sh
+
+      # The linters prove the scripts parse; this proves their branches do what
+      # the comments claim -- the entrypoint's JDK resolution order and the
+      # version checks behind the automated bumps -- without building an image.
+      # From the runner's apt rather than an action, since bats is a single
+      # bash script.
+      - name: test the shell scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bats
+          bats tests
+
+  # One native build per published platform. The publish workflow builds arm64
+  # under emulation and pushes it untested, so this is the only place an
+  # arm64-only fault -- a JDK the vendor does not ship for aarch64, an agent CLI
+  # without a native binary -- can be caught before it reaches :latest.
+  # Waits for lint as well, so code the linters reject is never built.
+  build:
+    needs:
+      - select
+      - lint
+    if: needs.select.outputs.agents != ''
+
+    strategy:
+      # A fault in one platform should leave the other's result visible, so
+      # the failure can be read as platform-specific or not.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: amd64
+            runs-on: ubuntu-latest
+          - platform: arm64
+            runs-on: ubuntu-24.04-arm
+
+    runs-on: ${{ matrix.runs-on }}
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: set up docker buildx
-        if: steps.select.outputs.agents != ''
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
         with:
           driver: docker-container
@@ -109,10 +154,9 @@ jobs:
       # driver discards a build that is neither pushed nor loaded, and a
       # multi-platform one cannot be loaded at all.
       - name: build without publishing
-        if: steps.select.outputs.agents != ''
         uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         env:
-          BUILD_AGENTS: ${{ steps.select.outputs.agents }}
+          BUILD_AGENTS: ${{ needs.select.outputs.agents }}
           LOCAL: true
         with:
           targets: default
@@ -121,15 +165,40 @@ jobs:
           # Reads main's cache but writes none: a pull request's cache is scoped
           # to its own branch, so writing it would only burn the quota.
           set: |
-            ${{ steps.select.outputs.cache }}
+            ${{ needs.select.outputs.cache }}
 
       # The build proves the layers assemble; this proves the toolchain and the
       # agent CLI in the result actually start, and puts the versions it found
       # in the job summary, one table per image.
       - name: smoke test the built images
-        if: steps.select.outputs.agents != ''
         env:
-          AGENTS: ${{ steps.select.outputs.agents }}
+          AGENTS: ${{ needs.select.outputs.agents }}
         run: |
           set -euo pipefail
           .github/scripts/smoke-test.sh ${AGENTS//,/ }
+
+  # The required status check. It always runs and reports, because a skipped
+  # job never reports a status and would leave every pull request waiting
+  # forever; a skipped build -- no agent labels -- is a pass, a failed or
+  # cancelled job anywhere above is not.
+  verify:
+    needs:
+      - select
+      - lint
+      - build
+    if: always()
+
+    runs-on: ubuntu-latest
+
+    permissions: {}
+
+    steps:
+      - name: check the results
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          set -euo pipefail
+          echo "${RESULTS}"
+          if grep -q -E '"(failure|cancelled)"' <<< "${RESULTS}"; then
+            exit 1
+          fi
