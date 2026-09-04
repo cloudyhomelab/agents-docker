@@ -142,28 +142,29 @@ RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
 # and says it succeeded.
 # sdkman keeps the zip of every candidate it installs under tmp/ and nothing
 # reads it again.
+#
+# /opt/java holds stable per-major paths, so selecting a JDK at run time needs
+# only "21" and not the full "21.0.10.fx-zulu" vendor string. Every target is
+# checked, because ln -s happily creates a dangling link and the breakage would
+# only surface at run time, inside someone's session.
 RUN bash -c 'source "${SDKMAN_DIR}/bin/sdkman-init.sh"; \
     set -e; \
+    fail() { echo "$*" >&2; exit 1; }; \
     for version in ${JAVA_VERSIONS}; do sdk install java "${version}"; done; \
     sdk install maven; \
-    rm -rf "${SDKMAN_DIR}/tmp"/*'
-
-# Stable per-major paths, so selecting a JDK at run time needs only "21" and
-# not the full "21.0.10.fx-zulu" vendor string.
-# Every target is checked, because ln -s happily creates a dangling link and the
-# breakage would only surface at run time, inside someone's session.
-RUN mkdir -p /opt/java \
-    && for version in ${JAVA_VERSIONS}; do \
-         candidate="${SDKMAN_DIR}/candidates/java/${version}"; \
-         test -d "${candidate}" || { echo "missing JDK: ${candidate}" >&2; exit 1; }; \
-         ln -s "${candidate}" "/opt/java/${version%%.*}"; \
-       done \
-    && test -d "/opt/java/${JAVA_LTS}" || { echo "JAVA_LTS=${JAVA_LTS} not among JAVA_VERSIONS" >&2; exit 1; } \
-    && test -d "/opt/java/${JAVA_LATEST}" || { echo "JAVA_LATEST=${JAVA_LATEST} not among JAVA_VERSIONS" >&2; exit 1; } \
-    && ln -s "${JAVA_LTS}" /opt/java/lts \
-    && ln -s "${JAVA_LATEST}" /opt/java/latest \
-    && test -d "${SDKMAN_DIR}/candidates/maven/current" \
-    && chmod -R a+rX /opt
+    rm -rf "${SDKMAN_DIR}/tmp"/*; \
+    mkdir -p /opt/java; \
+    for version in ${JAVA_VERSIONS}; do \
+      candidate="${SDKMAN_DIR}/candidates/java/${version}"; \
+      test -d "${candidate}" || fail "missing JDK: ${candidate}"; \
+      ln -s "${candidate}" "/opt/java/${version%%.*}"; \
+    done; \
+    test -d "/opt/java/${JAVA_LTS}" || fail "JAVA_LTS=${JAVA_LTS} not among JAVA_VERSIONS"; \
+    test -d "/opt/java/${JAVA_LATEST}" || fail "JAVA_LATEST=${JAVA_LATEST} not among JAVA_VERSIONS"; \
+    ln -s "${JAVA_LTS}" /opt/java/lts; \
+    ln -s "${JAVA_LATEST}" /opt/java/latest; \
+    test -d "${SDKMAN_DIR}/candidates/maven/current" || fail "missing maven: ${SDKMAN_DIR}/candidates/maven/current"; \
+    chmod -R a+rX /opt'
 
 ENV M2_HOME="${SDKMAN_DIR}/candidates/maven/current"
 ENV PATH="${M2_HOME}/bin:${PATH}"
