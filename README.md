@@ -118,17 +118,19 @@ version.
 Every published image is signed with [cosign](https://github.com/sigstore/cosign)
 in keyless mode, so there is no public key to distribute -- the signature is tied
 to the workflow run that produced it. Verifying asserts that the image really was
-built by `.github/workflows/build.yml` in this repository:
+built by `.github/workflows/publish.yml` in this repository:
 
 ```bash
 cosign verify \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp \
-    '^https://github\.com/cloudyhomelab/agents-docker/\.github/workflows/build\.yml@refs/' \
+    '^https://github\.com/cloudyhomelab/agents-docker/\.github/workflows/publish\.yml@refs/' \
   docker.io/binarycodes/claude:latest
 ```
 
 Substitute `codex` or `gemini` for `claude`, and a version tag for `latest`.
+Tags published before the workflow was renamed carry its old name,
+`build.yml`, in the identity instead.
 
 The identity is a regular expression that stops at `@refs/` rather than pinning
 one ref, because the ref a run signs under depends on how it was triggered: the
