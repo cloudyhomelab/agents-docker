@@ -128,10 +128,13 @@ RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
 # No -f, despite the unquoted list: sdkman moves the unzipped JDK into place
 # with an unquoted glob and returns 0 regardless, so noglob installs nothing
 # and says it succeeded.
+# sdkman keeps the zip of every candidate it installs under tmp/ and nothing
+# reads it again.
 RUN bash -c 'source "${SDKMAN_DIR}/bin/sdkman-init.sh"; \
     set -e; \
     for version in ${JAVA_VERSIONS}; do sdk install java "${version}"; done; \
-    sdk install maven'
+    sdk install maven; \
+    rm -rf "${SDKMAN_DIR}/tmp"/*'
 
 # Stable per-major paths, so selecting a JDK at run time needs only "21" and
 # not the full "21.0.10.fx-zulu" vendor string.
