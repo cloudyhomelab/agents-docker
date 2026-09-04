@@ -108,10 +108,10 @@ The `${tool}_home` volume persists agent configuration and credentials between
 runs. Toolchains and the agent CLIs themselves live outside `/home/agent`, so
 they always come from the image and are refreshed by `--pull always`.
 
-[`shell-helper/zshrc`](shell-helper/zshrc) has fuller `claude`, `codex` and
-`gemini` wrappers: a config volume per CLI, separate volumes per cache, the
-host Maven repository shared, and `<AGENT>_IMAGE_TAG` to pin a published
-version.
+[`shell-helper/agents.sh`](shell-helper/agents.sh) has fuller `claude`, `codex`
+and `gemini` wrappers to source from the same rc file: a config volume per CLI,
+separate volumes per cache, the host Maven repository shared when it exists, and
+`<AGENT>_IMAGE_TAG` to pin a published version.
 
 ## Verifying the Images
 

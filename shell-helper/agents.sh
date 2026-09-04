@@ -1,11 +1,12 @@
 # Copyright (c) 2026 binarycodes
 # GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
+# shellcheck shell=bash
 
 # Wrappers that run the containerised agent CLIs against a project directory.
 #
-# Source this from ~/.zshrc:
-#     source /path/to/shell-helper/zshrc
+# Source this from ~/.bashrc or ~/.zshrc:
+#     source /path/to/shell-helper/agents.sh
 #
 # Each function shadows a CLI of the same name on PATH, so the container is
 # what runs by default. JAVA_VERSION is forwarded only when set, leaving a
@@ -15,6 +16,17 @@
 #     claude .
 #     JAVA_VERSION=17 claude . --resume
 #     CODEX_IMAGE_TAG=0.152.0 codex ~/some/project
+#
+# The first argument is always the workspace, so there is no bare form:
+# `claude --version` fails the directory check; write `claude . --version`.
+#
+# Nothing is created on the host outside /tmp. Configuration, caches and Go
+# modules live in named volumes; the host ~/.m2 is shared only when it already
+# exists. The one file the helper creates is an empty placeholder for the
+# claude CLI's ~/.claude.json, under /tmp/agent-helper-<uid>/, because a bind
+# mount whose source is missing becomes a directory. Being in /tmp it does not
+# survive a reboot or /tmp cleanup, and the state the CLI keeps in that file
+# goes with it.
 
 # Shared plumbing: _agent_run <tool> <tag> <workspace> [cli args...]
 _agent_run() {
@@ -43,7 +55,7 @@ _agent_run() {
         claude)
             # .claude.json is bind mounted as a file to keep it editable from
             # the host, unlike the rest of the config.
-            tmp_path="$HOME/.tmp-claude"
+            tmp_path="/tmp/agent-helper-${UID}"
             if [[ ! -f "${tmp_path}/claude.json" ]]; then
                 mkdir -p "${tmp_path}"
                 touch "${tmp_path}/claude.json"
@@ -61,6 +73,13 @@ _agent_run() {
             ;;
     esac
 
+    # Only an existing ~/.m2 is shared: a missing bind source would be created
+    # root-owned by the daemon.
+    local -a maven
+    if [[ -d "$HOME/.m2" ]]; then
+        maven=(-v "$HOME/.m2:/home/agent/.m2")
+    fi
+
     cmd=(
         docker run
         --rm
@@ -68,7 +87,7 @@ _agent_run() {
         --pull always
         "${config[@]}"
         -v "${workspace_abs}:/workspace"
-        -v "$HOME/.m2:/home/agent/.m2"
+        "${maven[@]}"
         -v "${tool}_go:/home/agent/go"
         -v "${tool}_cache:/home/agent/.cache"
         -w /workspace

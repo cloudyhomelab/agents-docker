@@ -24,10 +24,8 @@ status=0
 # The worktree rather than the staged content, matching what CI lints: a hook
 # that passed on the index while the files on disk were broken would only move
 # the surprise to the pull request.
-#
-# shell-helper/zshrc is not listed: shellcheck has no zsh support.
 if command -v shellcheck >/dev/null 2>&1; then
-    shellcheck .githooks/* scripts/agent-entrypoint .github/scripts/*.sh || status=1
+    shellcheck .githooks/* scripts/agent-entrypoint shell-helper/agents.sh .github/scripts/*.sh || status=1
 else
     echo "pre-commit: shellcheck is not installed; skipping it" >&2
 fi
