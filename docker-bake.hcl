@@ -63,6 +63,7 @@ variable "PACKAGES" {
     "ca-certificates",
     "curl",
     "git",
+    "jq",
     "make",
     "ncurses-term",
     "nodejs",
