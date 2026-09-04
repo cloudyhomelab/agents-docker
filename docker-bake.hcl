@@ -59,6 +59,7 @@ variable "PACKAGES" {
   type = list(string)
   default = [
     "bash",
+    "bats",
     "build-essential", # cgo, native pip wheels, node-gyp
     "ca-certificates",
     "curl",
