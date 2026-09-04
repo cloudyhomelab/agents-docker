@@ -18,7 +18,8 @@ One image per agent, tagged `latest` and with the agent CLI's own version, as
 in `claude:<version>`. Each image carries every supported toolchain, so the
 image does not have to be matched to the project:
 
-- JDK 8, 11, 17, 21, 25 and 26 (Zulu, with JavaFX) plus Maven
+- Several JDK majors (Zulu, with JavaFX) plus Maven; `JAVA_VERSIONS` in
+  `docker-bake.hcl` is the list
 - Python 3 with `pip` and `venv`, plus a venv on `PATH` carrying `ansible`,
   `ansible-lint`, `antsibull-changelog` and `molecule` (with the podman driver;
   `molecule test` needs a `podman` binary, which the image does not carry)
@@ -28,8 +29,8 @@ image does not have to be matched to the project:
 ### Selecting a JDK
 
 The LTS JDK is active by default. Override it per run with `JAVA_VERSION`,
-using either a major version or the `lts` / `latest` aliases (currently 25 and
-26):
+using either a major version or the `lts` / `latest` aliases (`JAVA_LTS` and
+`JAVA_LATEST` in `docker-bake.hcl`):
 
 ```bash
 docker run --rm -it -e JAVA_VERSION=17 docker.io/binarycodes/claude:latest
