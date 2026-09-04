@@ -33,7 +33,7 @@ variable "JAVA_VERSIONS" {
 variable "JAVA_LTS" { default = "25" }
 variable "JAVA_LATEST" { default = "26" }
 
-variable "LOCAL" { default = false }
+variable "LOCAL" { default = true }
 
 variable "BUILD_AGENTS" {
   type    = list(string)

@@ -164,6 +164,9 @@ Print the resolved build plan:
 docker buildx bake --print
 ```
 
+These build for the host platform only. The published images are multi-platform,
+that needs a `docker-container` builder and `LOCAL=false` in the environment.
+
 ## Contributing
 
 Enable the repository's hooks once per clone:

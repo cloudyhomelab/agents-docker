@@ -107,6 +107,7 @@ jobs:
         env:
           BUILD_AGENTS: ${{ steps.select.outputs.agents }}
           REVISION: ${{ steps.select.outputs.revision }}
+          LOCAL: false
         with:
           targets: default
           push: true

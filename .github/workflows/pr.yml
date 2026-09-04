@@ -93,8 +93,8 @@ jobs:
           driver: docker-container
 
       # Proves the toolchain and agent CLI versions actually install before they
-      # reach main. push is false, and LOCAL drops the second platform: this is
-      # a smoke test, not a release.
+      # reach main. push is false, and LOCAL ensures that the build is only for
+      # the host platform as this is a smoke test.
       - name: build without publishing
         if: steps.select.outputs.agents != ''
         uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
