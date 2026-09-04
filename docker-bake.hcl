@@ -16,6 +16,8 @@ variable "GEMINI_VERSION" { default = "0.58.0" }
 
 variable "GO_VERSION" { default = "1.27.0" }
 
+variable "HADOLINT_VERSION" { default = "2.15.1" }
+
 # Every major listed here is installed; the entrypoint activates one per run.
 variable "JAVA_VERSIONS" {
   type = list(string)
@@ -138,6 +140,7 @@ target "agent" {
     CODEX_VERSION = CODEX_VERSION
     GEMINI_VERSION = GEMINI_VERSION
     GO_VERSION = GO_VERSION
+    HADOLINT_VERSION = HADOLINT_VERSION
     JAVA_VERSIONS = join(" ", JAVA_VERSIONS)
     JAVA_LTS = JAVA_LTS
     JAVA_LATEST = JAVA_LATEST

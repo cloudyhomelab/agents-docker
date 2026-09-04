@@ -10,6 +10,7 @@ ARG CLAUDE_VERSION
 ARG CODEX_VERSION
 ARG GEMINI_VERSION
 ARG GO_VERSION
+ARG HADOLINT_VERSION
 ARG JAVA_VERSIONS
 ARG JAVA_LTS
 ARG JAVA_LATEST
@@ -53,6 +54,17 @@ RUN groupadd -g 1000 agent \
     && useradd -m -u 1000 -g 1000 -s /bin/bash agent \
     && install -d -o agent -g agent /home/agent/.cache \
     && git config --system --add safe.directory /workspace
+
+# Not in the Debian archive, so the static release binary is fetched instead.
+# The release names its assets x86_64 and arm64 where TARGETARCH says amd64 and
+# arm64, hence the map; any other arch fails here rather than 404ing on an asset
+# that does not exist.
+ARG HADOLINT_VERSION
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in amd64) arch=x86_64 ;; arm64) arch=arm64 ;; *) echo "no hadolint build for ${TARGETARCH}" >&2; exit 1 ;; esac \
+    && curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        -o /usr/local/bin/hadolint "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-${arch}" \
+    && chmod 0755 /usr/local/bin/hadolint
 
 
 #====================
