@@ -20,11 +20,11 @@ image does not have to be matched to the project:
 
 - Several JDK majors (Zulu, with JavaFX) plus Maven; `JAVA_VERSIONS` in
   `docker-bake.hcl` is the list
-- Python 3 with `pip` and `venv`, plus a venv on `PATH` carrying `ansible`,
-  `ansible-lint`, `antsibull-changelog` and `molecule` (with the podman driver;
-  `molecule test` needs a `podman` binary, which the image does not carry)
+- Python 3 with `pip` and `venv`, plus a venv on `PATH` carrying the Ansible
+  toolchain; `PIP_PACKAGES` in `docker-bake.hcl` is the list
 - Go
 - Node.js and npm
+- The Debian packages in `PACKAGES` in `docker-bake.hcl`
 
 ### Selecting a JDK
 
