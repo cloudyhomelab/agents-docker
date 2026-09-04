@@ -164,6 +164,12 @@ Print the resolved build plan:
 docker buildx bake --print
 ```
 
+Check that a built image actually runs, as the pull request workflow does:
+
+```bash
+.github/scripts/smoke-test.sh claude
+```
+
 These build for the host platform only. The published images are multi-platform,
 that needs a `docker-container` builder and `LOCAL=false` in the environment.
 

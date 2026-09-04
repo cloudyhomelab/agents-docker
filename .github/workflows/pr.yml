@@ -93,8 +93,10 @@ jobs:
           driver: docker-container
 
       # Proves the toolchain and agent CLI versions actually install before they
-      # reach main. push is false, and LOCAL ensures that the build is only for
-      # the host platform as this is a smoke test.
+      # reach main. push is false, and LOCAL keeps the build to the host
+      # platform, which is also what lets load work: the docker-container
+      # driver discards a build that is neither pushed nor loaded, and a
+      # multi-platform one cannot be loaded at all.
       - name: build without publishing
         if: steps.select.outputs.agents != ''
         uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
@@ -104,7 +106,19 @@ jobs:
         with:
           targets: default
           push: false
+          load: true
           # Reads main's cache but writes none: a pull request's cache is scoped
           # to its own branch, so writing it would only burn the quota.
           set: |
             ${{ steps.select.outputs.cache }}
+
+      # The build proves the layers assemble; this proves the toolchain and the
+      # agent CLI in the result actually start, and puts the versions it found
+      # in the job summary, one table per image.
+      - name: smoke test the built images
+        if: steps.select.outputs.agents != ''
+        env:
+          AGENTS: ${{ steps.select.outputs.agents }}
+        run: |
+          set -euo pipefail
+          .github/scripts/smoke-test.sh ${AGENTS//,/ }
