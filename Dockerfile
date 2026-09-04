@@ -27,13 +27,20 @@ FROM debian:13-slim AS base
 ARG PACKAGES
 
 ENV DEBIAN_FRONTEND=noninteractive
+# The cache mounts keep the package lists and the downloaded .debs out of the
+# layer, as the usual rm -rf of the lists did, but carry them into the next
+# build. Debian's image ships a docker-clean hook that deletes every .deb as
+# soon as it is installed, which would empty the cache each time; it goes, and
+# the setting that keeps the downloads replaces it.
 # -f so an apt pattern such as linux-headers-* is not filesystem-matched before
-# apt sees it; +f again for the cleanup glob.
-RUN set -f \
+# apt sees it.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache \
+    && set -f \
     && apt-get update \
-    && apt-get install -y --no-install-recommends ${PACKAGES} \
-    && set +f \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends ${PACKAGES}
 
 # 1000:1000 explicitly, because a bind-mounted workspace carries the host's
 # ownership: the files an agent writes come back out belonging to the person
@@ -78,12 +85,15 @@ ARG PIP_PACKAGES
 # so molecule and its driver share an interpreter with the ansible-core they
 # drive rather than resolving a second copy of it.
 ENV VIRTUAL_ENV="/opt/venv"
+# A cache mount rather than --no-cache-dir: either keeps the wheel cache out of
+# the layer, but this one survives into the next build.
 # set -f, because the list is deliberately unquoted to word-split and an extra
 # such as molecule-plugins[podman] is also a valid glob pattern.
-RUN set -f \
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    set -f \
     && python3 -m venv "${VIRTUAL_ENV}" \
-    && "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip \
-    && "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir ${PIP_PACKAGES} \
+    && "${VIRTUAL_ENV}/bin/pip" install --upgrade pip \
+    && "${VIRTUAL_ENV}/bin/pip" install ${PIP_PACKAGES} \
     && chmod -R a+rX "${VIRTUAL_ENV}"
 
 # Ahead of /usr/bin, so `python3` in a session is the interpreter that can
