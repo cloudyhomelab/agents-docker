@@ -14,6 +14,8 @@ on:
   pull_request:
     types:
       - closed
+    branches:
+      - main
 
 # One group for every trigger: on a closed event github.ref is that pull
 # request's own merge ref, so a per-ref group would let two merges publish in
@@ -27,9 +29,10 @@ env:
 
 jobs:
   publish:
-    # closed fires whatever the base branch, so without the base.ref check a
-    # topic-branch merge would move :latest.
-    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.base.ref == github.event.repository.default_branch)
+    # merged is only ever set on the pull request path, and ref_name is only
+    # main on a dispatch started from main: a closed event runs on the pull
+    # request's own merge ref.
+    if: github.event.pull_request.merged || github.ref_name == 'main'
     runs-on: ubuntu-latest
 
     permissions:
