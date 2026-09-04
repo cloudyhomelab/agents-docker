@@ -1,3 +1,7 @@
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 name: verify pull request
 
 on:
@@ -26,6 +30,32 @@ jobs:
       - name: checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Both linters are deliberately ungated by the labels below: code the
+      # linter rejects should fail the check even when no image is due to be
+      # built.
+      - name: lint the dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Dockerfile
+          config: .hadolint.yaml
+
+      # The same file list as the pre-commit hook runs, glob included, so a
+      # hook added later is linted without either side being updated.
+      # shell-helper/zshrc is not listed: shellcheck has no zsh support.
+      - name: lint the shell scripts
+        run: shellcheck .githooks/* scripts/agent-entrypoint .github/scripts/*.sh
+
+      # The linters prove the scripts parse; this proves their branches do what
+      # the comments claim -- the entrypoint's JDK resolution order and the
+      # version checks behind the automated bumps -- without building an image.
+      # Ungated like the linters, and from the runner's apt rather than an
+      # action, since bats is a single bash script.
+      - name: test the shell scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bats
+          bats tests
+
       # Skipped on the bump branch, which labels itself with only the agents it
       # bumped; the path rules would widen that to all three.
       - name: label the agents this pull request affects
@@ -38,9 +68,7 @@ jobs:
         env:
           # The labeler's own view when it ran, and the labels already on the
           # pull request when it did not -- the bump branch's case.
-          LABELS: >-
-            ${{ steps.labeler.outputs.all-labels
-                || join(github.event.pull_request.labels.*.name, ',') }}
+          LABELS: ${{ steps.labeler.outputs.all-labels || join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           set -euo pipefail
 
@@ -76,8 +104,10 @@ jobs:
           driver: docker-container
 
       # Proves the toolchain and agent CLI versions actually install before they
-      # reach main. push is false, and LOCAL drops the second platform: this is
-      # a smoke test, not a release.
+      # reach main. push is false, and LOCAL keeps the build to the host
+      # platform, which is also what lets load work: the docker-container
+      # driver discards a build that is neither pushed nor loaded, and a
+      # multi-platform one cannot be loaded at all.
       - name: build without publishing
         if: steps.select.outputs.agents != ''
         uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
@@ -87,7 +117,19 @@ jobs:
         with:
           targets: default
           push: false
+          load: true
           # Reads main's cache but writes none: a pull request's cache is scoped
           # to its own branch, so writing it would only burn the quota.
           set: |
             ${{ steps.select.outputs.cache }}
+
+      # The build proves the layers assemble; this proves the toolchain and the
+      # agent CLI in the result actually start, and puts the versions it found
+      # in the job summary, one table per image.
+      - name: smoke test the built images
+        if: steps.select.outputs.agents != ''
+        env:
+          AGENTS: ${{ steps.select.outputs.agents }}
+        run: |
+          set -euo pipefail
+          .github/scripts/smoke-test.sh ${AGENTS//,/ }

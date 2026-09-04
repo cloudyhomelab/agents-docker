@@ -1,34 +1,52 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Selects the JDK for this container. The image ships every supported major, so
 # JAVA_HOME cannot be baked into an ENV layer -- it is resolved per run, in
 # order of how explicit the request is: the environment wins, then whatever the
 # project itself declares, then the LTS default.
-set -euo pipefail
 
 java_dir="/opt/java"
 
+# Each file is parsed rather than merely probed for: a .sdkmanrc that sets only
+# other candidates must not shadow a .java-version sitting beside it.
 resolve_project_version() {
+    local version=""
+
     if [[ -f .sdkmanrc ]]; then
-        sed -n 's/^[[:space:]]*java=\([0-9][0-9]*\).*/\1/p' .sdkmanrc | head -n 1
-    elif [[ -f .java-version ]]; then
-        # Accepts both "21" and vendor strings such as "21.0.10.fx-zulu".
-        sed -n 's/^[[:space:]]*\([0-9][0-9]*\).*/\1/p' .java-version | head -n 1
+        version=$(sed -n 's/^[[:space:]]*java=\([0-9][0-9]*\).*/\1/p' .sdkmanrc | head -n 1)
     fi
+
+    if [[ -z ${version} && -f .java-version ]]; then
+        # Accepts both "21" and vendor strings such as "21.0.10.fx-zulu".
+        version=$(sed -n 's/^[[:space:]]*\([0-9][0-9]*\).*/\1/p' .java-version | head -n 1)
+    fi
+
+    printf '%s' "${version}"
 }
 
-requested="${JAVA_VERSION:-}"
-[[ -z ${requested} ]] && requested="$(resolve_project_version)"
-[[ -z ${requested} ]] && requested="lts"
+main() {
+    set -euo pipefail
+    local requested="${JAVA_VERSION:-}"
+    [[ -z ${requested} ]] && requested="$(resolve_project_version)"
+    [[ -z ${requested} ]] && requested="lts"
 
-if [[ -d "${java_dir}/${requested}" ]]; then
-    export JAVA_HOME="${java_dir}/${requested}"
-    export PATH="${JAVA_HOME}/bin:${PATH}"
-else
-    # Keep going with the default rather than failing: most sessions in a
-    # mistagged container are not Java work and should not be blocked by it.
-    echo "agent-entrypoint: no JDK '${requested}' in this image; available: $(cd "${java_dir}" && echo *)" >&2
-    export JAVA_HOME="${java_dir}/lts"
-    export PATH="${JAVA_HOME}/bin:${PATH}"
-fi
+    if [[ -d "${java_dir}/${requested}" ]]; then
+        export JAVA_HOME="${java_dir}/${requested}"
+        export PATH="${JAVA_HOME}/bin:${PATH}"
+    else
+        # Keep going with the default rather than failing: most sessions in a
+        # mistagged container are not Java work and should not be blocked by it.
+        echo "agent-entrypoint: no JDK '${requested}' in this image; available: $(cd "${java_dir}" && echo *)" >&2
+        export JAVA_HOME="${java_dir}/lts"
+        export PATH="${JAVA_HOME}/bin:${PATH}"
+    fi
 
-exec "$@"
+    exec "$@"
+}
+
+# tests/agent-entrypoint.bats sources this file for the functions above; only a
+# direct run selects a JDK and execs.
+[[ ${BASH_SOURCE[0]} != "$0" ]] || main "$@"

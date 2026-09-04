@@ -1,3 +1,7 @@
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Wrappers that run the containerised agent CLIs against a project directory.
 #
 # Source this from ~/.zshrc:
@@ -52,6 +56,9 @@ _agent_run() {
         codex)
             config=(-v codex_config:/home/agent/.codex)
             ;;
+        gemini)
+            config=(-v gemini_config:/home/agent/.gemini)
+            ;;
     esac
 
     cmd=(
@@ -80,4 +87,8 @@ claude() {
 
 codex() {
     _agent_run codex "${CODEX_IMAGE_TAG:-latest}" "$@"
+}
+
+gemini() {
+    _agent_run gemini "${GEMINI_IMAGE_TAG:-latest}" "$@"
 }

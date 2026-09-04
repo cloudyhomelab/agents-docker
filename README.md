@@ -14,9 +14,9 @@ Images are published on Docker Hub under:
 
 ## Available Images
 
-One image per agent, tagged `latest` and with the agent CLI's own version
-(for example `claude:2.1.252`). Each image carries every supported toolchain,
-so the image does not have to be matched to the project:
+One image per agent, tagged `latest` and with the agent CLI's own version, as
+in `claude:<version>`. Each image carries every supported toolchain, so the
+image does not have to be matched to the project:
 
 - JDK 8, 11, 17, 21, 25 and 26 (Zulu, with JavaFX) plus Maven
 - Python 3 with `pip` and `venv`, plus a venv on `PATH` carrying `ansible`,
@@ -108,9 +108,43 @@ The `${tool}_home` volume persists agent configuration and credentials between
 runs. Toolchains and the agent CLIs themselves live outside `/home/agent`, so
 they always come from the image and are refreshed by `--pull always`.
 
-[`shell-helper/zshrc`](shell-helper/zshrc) has fuller `claude` and `codex`
-wrappers: a config volume per CLI, separate volumes per cache, the host Maven
-repository shared, and `<AGENT>_IMAGE_TAG` to pin a published version.
+[`shell-helper/zshrc`](shell-helper/zshrc) has fuller `claude`, `codex` and
+`gemini` wrappers: a config volume per CLI, separate volumes per cache, the
+host Maven repository shared, and `<AGENT>_IMAGE_TAG` to pin a published
+version.
+
+## Verifying the Images
+
+Every published image is signed with [cosign](https://github.com/sigstore/cosign)
+in keyless mode, so there is no public key to distribute -- the signature is tied
+to the workflow run that produced it. Verifying asserts that the image really was
+built by `.github/workflows/publish.yml` in this repository:
+
+```bash
+cosign verify \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp \
+    '^https://github\.com/cloudyhomelab/agents-docker/\.github/workflows/publish\.yml@refs/' \
+  docker.io/binarycodes/claude:latest
+```
+
+Substitute `codex` or `gemini` for `claude`, and a version tag for `latest`.
+Tags published before the workflow was renamed carry its old name,
+`build.yml`, in the identity instead.
+
+The identity is a regular expression that stops at `@refs/` rather than pinning
+one ref, because the ref a run signs under depends on how it was triggered: the
+usual path is a merged pull request, a manual `workflow_dispatch` is not the
+same ref. The repository and the workflow file -- the parts that carry the trust
+-- are still anchored exactly, and `cosign verify` prints the full identity it
+matched, so pin it further once you have seen what your tag actually carries.
+
+The build also attaches SBOM and provenance attestations, which say what went
+into the image rather than who built it:
+
+```bash
+docker buildx imagetools inspect docker.io/binarycodes/claude:latest
+```
 
 ## Build Locally
 
@@ -131,3 +165,44 @@ Print the resolved build plan:
 ```bash
 docker buildx bake --print
 ```
+
+Check that a built image actually runs, as the pull request workflow does:
+
+```bash
+.github/scripts/smoke-test.sh claude
+```
+
+These build for the host platform only. The published images are multi-platform,
+that needs a `docker-container` builder and `LOCAL=false` in the environment.
+
+Run the tests for the entrypoint and the update script, which need no image:
+
+```bash
+bats tests
+```
+
+## Contributing
+
+Enable the repository's hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`pre-commit` then runs the same `shellcheck`, `hadolint` and `bats` checks the
+pull request workflow does, and `commit-msg` checks the message against the
+conventions above. None of the three is required locally -- one that is not
+installed is reported and skipped, and CI remains the enforcement point.
+
+## License
+
+Copyright (c) 2026 binarycodes
+
+This project is licensed under the GNU General Public License v3.0 or later.
+See [LICENSE](LICENSE), or <https://www.gnu.org/licenses/gpl-3.0.txt>.
+
+Every file that supports comments carries the copyright and
+`SPDX-License-Identifier` header; `LICENSE` and this README state it in prose
+instead.
+
+SPDX-License-Identifier: `GPL-3.0-or-later`

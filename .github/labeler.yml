@@ -23,6 +23,7 @@ claude: &build-inputs
               - "!.github/**"
               - "!docs/**"
               - "!shell-helper/**"
+              - "!tests/**"
               - "!README.md"
               - "!LICENSE"
 codex: *build-inputs

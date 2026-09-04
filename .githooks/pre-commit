@@ -1,0 +1,51 @@
+#!/bin/sh
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# pre-commit hook - runs the same linters and shell tests as
+# .github/workflows/pr.yml, so a shell or Dockerfile mistake costs a second here
+# instead of a push and a workflow run.
+#
+# CI stays the enforcement point, which is why a tool that is not installed is
+# skipped rather than fatal: this hook is the fast path, not the gate.
+#
+# Enabled via:  git config core.hooksPath .githooks
+# Bypassed by:  git commit --no-verify
+
+set -eu
+
+# Hooks run from the top level for a normal checkout, but not for a worktree or
+# a subdirectory invocation, and every invocation below is root-relative.
+cd "$(git rev-parse --show-toplevel)"
+
+status=0
+
+# The worktree rather than the staged content, matching what CI lints: a hook
+# that passed on the index while the files on disk were broken would only move
+# the surprise to the pull request.
+#
+# shell-helper/zshrc is not listed: shellcheck has no zsh support.
+if command -v shellcheck >/dev/null 2>&1; then
+    shellcheck .githooks/* scripts/agent-entrypoint .github/scripts/*.sh || status=1
+else
+    echo "pre-commit: shellcheck is not installed; skipping it" >&2
+fi
+
+if command -v hadolint >/dev/null 2>&1; then
+    hadolint --config .hadolint.yaml Dockerfile || status=1
+else
+    echo "pre-commit: hadolint is not installed; skipping it" >&2
+fi
+
+if command -v bats >/dev/null 2>&1; then
+    bats tests || status=1
+else
+    echo "pre-commit: bats is not installed; skipping it" >&2
+fi
+
+if [ "${status}" -ne 0 ]; then
+    echo "pre-commit: checks failed; fix the above, or commit with --no-verify" >&2
+fi
+
+exit "${status}"

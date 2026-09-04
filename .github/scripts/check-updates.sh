@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Bumps the pinned agent CLI versions in docker-bake.hcl to whatever upstream
 # currently publishes, and records what moved so the calling workflow can name
@@ -7,16 +10,12 @@
 # Run from the repository root. Set BUMP_LOG to collect the bumps; a local run
 # can leave it unset and the log is discarded.
 
-set -euo pipefail
-
 BAKE_FILE="docker-bake.hcl"
 
 fail() {
   echo "check-updates: $*" >&2
   exit 1
 }
-
-[[ -f ${BAKE_FILE} ]] || fail "no ${BAKE_FILE} here; run this from the repository root"
 
 # One row per pinned version: the docker-bake.hcl variable, where to look up
 # the current release, and which project to look up. The label used in output
@@ -29,9 +28,6 @@ CHECKS=(
   "CODEX_VERSION       npm-dist-tag     @openai/codex"
   "GEMINI_VERSION      npm-dist-tag     @google/gemini-cli"
 )
-
-SCRATCH=$(mktemp -d)
-trap 'rm -rf "${SCRATCH}"' EXIT
 
 # These are called as $(...), and a function body running inside a command
 # substitution does not honour errexit -- a failed fetch would otherwise fall
@@ -78,11 +74,14 @@ latest_version() {
   esac
 }
 
-# Anchored on "^variable", so this agrees with the rewrite below; unanchored, a
-# comment mentioning the variable would be read here and skipped there.
+# Read back through bake rather than by parsing the HCL, so the pin reported
+# here is exactly what a build would see. Every target carries every version
+# arg; asking the agent's own target just keeps the jq path readable.
 current_version() {
-  awk -F'"' -v var="$1" \
-    '$0 ~ "^variable \"" var "\"" {print $4}' "${BAKE_FILE}"
+  local target="$1" variable="$2"
+
+  docker buildx bake --file "${BAKE_FILE}" --progress=quiet --print \
+    | jq -r --arg variable "${variable}" ".target.${target}.args[\$variable]"
 }
 
 # A bare dotted version and nothing else. Everything this rejects -- an empty
@@ -104,43 +103,55 @@ bump_version() {
   mv "${BAKE_FILE}.tmp" "${BAKE_FILE}"
 }
 
-for check in "${CHECKS[@]}"; do
-  # The columns are space-separated, so word splitting is the whole parse.
-  read -r variable source project <<<"${check}"
+main() {
+  set -euo pipefail
+  local check variable source project label latest current written
 
-  label="${variable%_VERSION}"
-  label="${label,,}"
+  [[ -f ${BAKE_FILE} ]] || fail "no ${BAKE_FILE} here; run this from the repository root"
 
-  if ! latest=$(latest_version "${source}" "${project}"); then
-    fail "${label} - could not determine the latest version"
-  fi
-  is_version "${latest}" \
-    || fail "${label} - upstream gave '${latest}', which is not a version"
+  SCRATCH=$(mktemp -d)
+  trap 'rm -rf "${SCRATCH}"' EXIT
 
-  current=$(current_version "${variable}")
-  [[ ${current} != *$'\n'* ]] \
-    || fail "${label} - ${variable} is pinned on more than one line in ${BAKE_FILE}"
-  is_version "${current}" \
-    || fail "${label} - read '${current}' as the current ${variable}; has ${BAKE_FILE} been reformatted?"
+  for check in "${CHECKS[@]}"; do
+    # The columns are space-separated, so word splitting is the whole parse.
+    read -r variable source project <<<"${check}"
 
-  echo "${label} - current version - ${current} ... latest version - ${latest}"
+    label="${variable%_VERSION}"
+    label="${label,,}"
 
-  if [[ "${current}" == "${latest}" ]]; then
-    echo "${label} - No update found"
-    continue
-  fi
+    if ! latest=$(latest_version "${source}" "${project}"); then
+      fail "${label} - could not determine the latest version"
+    fi
+    is_version "${latest}" \
+      || fail "${label} - upstream gave '${latest}', which is not a version"
 
-  bump_version "${variable}" "${current}" "${latest}"
+    current=$(current_version "${label}" "${variable}")
+    is_version "${current}" \
+      || fail "${label} - read '${current}' as the current ${variable} from ${BAKE_FILE}"
 
-  # The rewrite is a regex over one line: a miss would leave the pin untouched
-  # while the run still reported success, which is how the pins would quietly
-  # freeze.
-  written=$(current_version "${variable}")
-  [[ ${written} == "${latest}" ]] \
-    || fail "${label} - ${variable} still reads '${written}' after the rewrite"
+    echo "${label} - current version - ${current} ... latest version - ${latest}"
 
-  # Recorded so the workflow can name what moved in the commit message and PR
-  # body; discarded by default, because a local run has nothing to tell.
-  printf '%s %s %s\n' "${label}" "${current}" "${latest}" \
-    >> "${BUMP_LOG:-/dev/null}"
-done
+    if [[ "${current}" == "${latest}" ]]; then
+      echo "${label} - No update found"
+      continue
+    fi
+
+    bump_version "${variable}" "${current}" "${latest}"
+
+    # The rewrite is a regex over one line: a miss would leave the pin untouched
+    # while the run still reported success, which is how the pins would quietly
+    # freeze.
+    written=$(current_version "${label}" "${variable}")
+    [[ ${written} == "${latest}" ]] \
+      || fail "${label} - ${variable} still reads '${written}' after the rewrite"
+
+    # Recorded so the workflow can name what moved in the commit message and PR
+    # body; discarded by default, because a local run has nothing to tell.
+    printf '%s %s %s\n' "${label}" "${current}" "${latest}" \
+      >> "${BUMP_LOG:-/dev/null}"
+  done
+}
+
+# tests/check-updates.bats sources this file for the functions above; only a
+# direct run checks and bumps.
+[[ ${BASH_SOURCE[0]} != "$0" ]] || main "$@"

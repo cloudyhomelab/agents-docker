@@ -1,7 +1,16 @@
+# Copyright (c) 2026 binarycodes
+# GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Declarations only -- no FROM interpolates these and every stage redeclares
+# what it uses. They are here because one bake target passes all three agent
+# versions to every agent build, which reaches just one of the CLI stages, and
+# an arg no reached stage declares is one BuildKit warns about.
 ARG CLAUDE_VERSION
 ARG CODEX_VERSION
 ARG GEMINI_VERSION
 ARG GO_VERSION
+ARG HADOLINT_VERSION
 ARG JAVA_VERSIONS
 ARG JAVA_LTS
 ARG JAVA_LATEST
@@ -12,23 +21,57 @@ ARG PIP_PACKAGES
 #====================
 # base layer
 #====================
+# A floating tag on purpose: a digest pin would hold the base, and its security
+# updates, at whatever was current the day someone last bumped it.
 FROM debian:13-slim AS base
 ARG PACKAGES
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ${PACKAGES} \
-    && rm -rf /var/lib/apt/lists/*
+# The cache mounts keep the package lists and the downloaded .debs out of the
+# layer, as the usual rm -rf of the lists did, but carry them into the next
+# build. Debian's image ships a docker-clean hook that deletes every .deb as
+# soon as it is installed, which would empty the cache each time; it goes, and
+# the setting that keeps the downloads replaces it.
+# -f so an apt pattern such as linux-headers-* is not filesystem-matched before
+# apt sees it.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache \
+    && set -f \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ${PACKAGES}
 
-RUN useradd -m -s /bin/bash agent
+# 1000:1000 explicitly, because a bind-mounted workspace carries the host's
+# ownership: the files an agent writes come back out belonging to the person
+# who started it.
+#
+# .cache is created here, owned by agent, because a run mounts a named volume
+# onto it: Docker seeds a new volume from the image's directory, ownership
+# included, but only when that directory exists -- otherwise it creates the
+# mount point itself as root and the agent cannot write to its own cache. The
+# same applies to the toolchain and CLI config directories, each created in the
+# stage that owns it. This one stays here: go, npm and pip all share it.
+#
+# safe.directory, because that same host ownership is what git reads: on a host
+# where the user is not 1000, every git command in the session would refuse the
+# workspace as dubiously owned. --system, so the exemption also covers whichever
+# uid a --user override runs as.
+RUN groupadd -g 1000 agent \
+    && useradd -m -u 1000 -g 1000 -s /bin/bash agent \
+    && install -d -o agent -g agent /home/agent/.cache \
+    && git config --system --add safe.directory /workspace
 
-# Created here, owned by agent, because a run mounts a named volume onto it:
-# Docker seeds a new volume from the image's directory, ownership included, but
-# only when that directory exists -- otherwise it creates the mount point itself
-# as root and the agent cannot write to its own cache. The same applies to the
-# toolchain and CLI config directories, each created in the stage that owns it.
-# This one stays here: go, npm and pip all share it.
-RUN install -d -o agent -g agent /home/agent/.cache
+# Not in the Debian archive, so the static release binary is fetched instead.
+# The release names its assets x86_64 and arm64 where TARGETARCH says amd64 and
+# arm64, hence the map; any other arch fails here rather than 404ing on an asset
+# that does not exist.
+ARG HADOLINT_VERSION
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in amd64) arch=x86_64 ;; arm64) arch=arm64 ;; *) echo "no hadolint build for ${TARGETARCH}" >&2; exit 1 ;; esac \
+    && curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        -o /usr/local/bin/hadolint "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-${arch}" \
+    && chmod 0755 /usr/local/bin/hadolint
 
 
 #====================
@@ -42,12 +85,15 @@ ARG PIP_PACKAGES
 # so molecule and its driver share an interpreter with the ansible-core they
 # drive rather than resolving a second copy of it.
 ENV VIRTUAL_ENV="/opt/venv"
+# A cache mount rather than --no-cache-dir: either keeps the wheel cache out of
+# the layer, but this one survives into the next build.
 # set -f, because the list is deliberately unquoted to word-split and an extra
 # such as molecule-plugins[podman] is also a valid glob pattern.
-RUN set -f \
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    set -f \
     && python3 -m venv "${VIRTUAL_ENV}" \
-    && "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip \
-    && "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir ${PIP_PACKAGES} \
+    && "${VIRTUAL_ENV}/bin/pip" install --upgrade pip \
+    && "${VIRTUAL_ENV}/bin/pip" install ${PIP_PACKAGES} \
     && chmod -R a+rX "${VIRTUAL_ENV}"
 
 # Ahead of /usr/bin, so `python3` in a session is the interpreter that can
@@ -97,31 +143,51 @@ RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
     && bash /tmp/sdkman.sh \
     && rm /tmp/sdkman.sh
 
+# A quoted delimiter, so the variables reach bash unexpanded instead of being
+# substituted by BuildKit first. hadolint does not read the shebang and would
+# otherwise lint this as /bin/sh.
+# hadolint shell=/bin/bash
+RUN <<'EOF'
+#!/bin/bash
 # set -e only after sourcing, since sdkman-init.sh is not written to run under
-# it; and the steps are ';'-separated rather than '&&'-chained, because errexit
-# is suppressed inside a compound command that is part of an AND list -- there a
-# failed `sdk install` is swallowed and the image ships a JDK short.
-RUN bash -c 'source "${SDKMAN_DIR}/bin/sdkman-init.sh"; \
-    set -e; \
-    for version in ${JAVA_VERSIONS}; do sdk install java "${version}"; done; \
-    sdk install maven'
+# it.
+# shellcheck source=/dev/null
+source "${SDKMAN_DIR}/bin/sdkman-init.sh"
+set -e
+
+fail() {
+  echo "$*" >&2
+  exit 1
+}
+
+# No -f, despite the unquoted list: sdkman moves the unzipped JDK into place
+# with an unquoted glob and returns 0 regardless, so noglob installs nothing
+# and says it succeeded.
+for version in ${JAVA_VERSIONS}; do
+  sdk install java "${version}"
+done
+sdk install maven
+# The zip of every candidate stays under tmp/ and nothing reads it again.
+rm -rf "${SDKMAN_DIR}/tmp"/*
 
 # Stable per-major paths, so selecting a JDK at run time needs only "21" and
-# not the full "21.0.10.fx-zulu" vendor string.
-# Every target is checked, because ln -s happily creates a dangling link and the
-# breakage would only surface at run time, inside someone's session.
-RUN mkdir -p /opt/java \
-    && for version in ${JAVA_VERSIONS}; do \
-         candidate="${SDKMAN_DIR}/candidates/java/${version}"; \
-         test -d "${candidate}" || { echo "missing JDK: ${candidate}" >&2; exit 1; }; \
-         ln -s "${candidate}" "/opt/java/${version%%.*}"; \
-       done \
-    && test -d "/opt/java/${JAVA_LTS}" || { echo "JAVA_LTS=${JAVA_LTS} not among JAVA_VERSIONS" >&2; exit 1; } \
-    && test -d "/opt/java/${JAVA_LATEST}" || { echo "JAVA_LATEST=${JAVA_LATEST} not among JAVA_VERSIONS" >&2; exit 1; } \
-    && ln -s "${JAVA_LTS}" /opt/java/lts \
-    && ln -s "${JAVA_LATEST}" /opt/java/latest \
-    && test -d "${SDKMAN_DIR}/candidates/maven/current" \
-    && chmod -R a+rX /opt
+# not the full "21.0.10.fx-zulu" vendor string. Every target is checked,
+# because ln -s happily creates a dangling link and the breakage would only
+# surface at run time, inside someone's session.
+mkdir -p /opt/java
+for version in ${JAVA_VERSIONS}; do
+  candidate="${SDKMAN_DIR}/candidates/java/${version}"
+  test -d "${candidate}" || fail "missing JDK: ${candidate}"
+  ln -s "${candidate}" "/opt/java/${version%%.*}"
+done
+test -d "/opt/java/${JAVA_LTS}" || fail "JAVA_LTS=${JAVA_LTS} not among JAVA_VERSIONS"
+test -d "/opt/java/${JAVA_LATEST}" || fail "JAVA_LATEST=${JAVA_LATEST} not among JAVA_VERSIONS"
+ln -s "${JAVA_LTS}" /opt/java/lts
+ln -s "${JAVA_LATEST}" /opt/java/latest
+test -d "${SDKMAN_DIR}/candidates/maven/current" || fail "missing maven: ${SDKMAN_DIR}/candidates/maven/current"
+
+chmod -R a+rX /opt
+EOF
 
 ENV M2_HOME="${SDKMAN_DIR}/candidates/maven/current"
 ENV PATH="${M2_HOME}/bin:${PATH}"
@@ -150,11 +216,10 @@ ARG CLAUDE_VERSION
 # a throwaway HOME relocates the whole install out of the agent's home volume.
 RUN HOME=/opt/claude bash -o pipefail -c 'curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "https://claude.ai/install.sh" | bash -s "${CLAUDE_VERSION}"' \
     && ln -s /opt/claude/.local/bin/claude /usr/local/bin/claude \
-    && chmod -R a+rX /opt/claude
+    && chmod -R a+rX /opt/claude \
+    && install -d -o agent -g agent /home/agent/.claude
 
-RUN install -d -o agent -g agent /home/agent/.claude
-
-USER agent
+USER 1000
 WORKDIR /home/agent
 CMD ["claude"]
 
@@ -165,11 +230,14 @@ CMD ["claude"]
 FROM jdk AS codex
 ARG CODEX_VERSION
 
-RUN npm install -g --prefix /usr/local @openai/codex@"${CODEX_VERSION}"
+# A cache mount rather than a post-install `npm cache clean`: either keeps the
+# cache out of the layer, but this one survives into the next build. Locked,
+# because the codex and gemini stages install in parallel and share it.
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm install -g --prefix /usr/local @openai/codex@"${CODEX_VERSION}" \
+    && install -d -o agent -g agent /home/agent/.codex
 
-RUN install -d -o agent -g agent /home/agent/.codex
-
-USER agent
+USER 1000
 WORKDIR /home/agent
 CMD ["codex"]
 
@@ -180,10 +248,10 @@ CMD ["codex"]
 FROM jdk AS gemini
 ARG GEMINI_VERSION
 
-RUN npm install -g --prefix /usr/local @google/gemini-cli@"${GEMINI_VERSION}"
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm install -g --prefix /usr/local @google/gemini-cli@"${GEMINI_VERSION}" \
+    && install -d -o agent -g agent /home/agent/.gemini
 
-RUN install -d -o agent -g agent /home/agent/.gemini
-
-USER agent
+USER 1000
 WORKDIR /home/agent
 CMD ["gemini"]
