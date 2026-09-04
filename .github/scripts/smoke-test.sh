@@ -10,8 +10,9 @@
 #
 # Every check runs even after one has failed, so the table written per agent --
 # to the job summary under Actions, to stdout elsewhere -- is complete, and the
-# exit status says whether anything in it failed. Progress goes to stderr, so
-# the table is all that stdout carries.
+# exit status says whether anything in it failed. The rows are sorted by label
+# rather than left in the order the checks ran. Progress goes to stderr, so the
+# table is all that stdout carries.
 #
 # Run from the repository root after a bake that left the images in the local
 # docker daemon: a plain `docker buildx bake`, or one with --load.
@@ -70,10 +71,11 @@ in_image() {
 }
 
 failures=0
+rows=()
 
-# Appends one table row and logs the outcome. The cell carries the first line of
-# output, which for every tool here is the version; the full output of a failure
-# goes to the log, where there is room for it.
+# Collects one table row and logs the outcome. The cell carries the first line
+# of output, which for every tool here is the version; the full output of a
+# failure goes to the log, where there is room for it.
 run_check() {
   local image="$1" label="$2" command="$3"
   local output status=0 result line
@@ -92,7 +94,7 @@ run_check() {
 
   # First line only, with the one character that would break the table escaped.
   line="${output%%$'\n'*}"
-  echo "| ${label} | ${result} | ${line//|/\\|} |" >> "${SUMMARY}"
+  rows+=("| ${label} | ${result} | ${line//|/\\|} |")
 }
 
 for agent in "$@"; do
@@ -101,15 +103,7 @@ for agent in "$@"; do
   fi
 
   echo "smoke-test: ${agent} - ${image}" >&2
-
-  {
-    echo "### ${agent}"
-    echo
-    echo "\`${image}\`"
-    echo
-    echo "| Check | Result | Output |"
-    echo "| --- | --- | --- |"
-  } >> "${SUMMARY}"
+  rows=()
 
   for check in "${CHECKS[@]}"; do
     # The columns are space-separated, so word splitting is the whole parse;
@@ -120,14 +114,25 @@ for agent in "$@"; do
 
   # Every entry under /opt/java, aliases included, listed from the image rather
   # than from JAVA_VERSIONS so it is the shipped symlinks that get started; the
-  # build only checked that their targets exist. -v puts 8 before 11.
-  for jdk in $(in_image "${image}" ls -v /opt/java); do
+  # build only checked that their targets exist.
+  for jdk in $(in_image "${image}" ls /opt/java); do
     run_check "${image}" "jdk ${jdk}" "/opt/java/${jdk}/bin/java -version"
   done
 
   run_check "${image}" "${agent}" "${agent} --version"
 
-  echo >> "${SUMMARY}"
+  # -V so the jdk rows go 8, 11, 17 rather than 11, 17, 8, with the two aliases
+  # after the numbers; C locale so the order does not depend on the runner.
+  {
+    echo "### ${agent}"
+    echo
+    echo "\`${image}\`"
+    echo
+    echo "| Check | Result | Output |"
+    echo "| --- | --- | --- |"
+    printf '%s\n' "${rows[@]}" | LC_ALL=C sort -V
+    echo
+  } >> "${SUMMARY}"
 done
 
 [[ ${failures} -eq 0 ]] || fail "${failures} check(s) failed"
