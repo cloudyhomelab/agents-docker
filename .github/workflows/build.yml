@@ -15,8 +15,12 @@ on:
     types:
       - closed
 
+# One group for every trigger: on a closed event github.ref is that pull
+# request's own merge ref, so a per-ref group would let two merges publish in
+# parallel and :latest would end up whichever finished last.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 env:
   REGISTRY: docker.io
