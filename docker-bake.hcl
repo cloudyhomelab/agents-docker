@@ -10,8 +10,8 @@ variable "NAMESPACE"  { default = "binarycodes" }
 # leaves it empty, which is the honest answer for a working tree.
 variable "REVISION" { default = "" }
 
-variable "CLAUDE_VERSION" { default = "2.1.260" }
-variable "CODEX_VERSION" { default = "0.153.2" }
+variable "CLAUDE_VERSION" { default = "2.1.261" }
+variable "CODEX_VERSION" { default = "0.153.4" }
 variable "GEMINI_VERSION" { default = "0.58.0" }
 
 variable "GO_VERSION" { default = "1.27.0" }
