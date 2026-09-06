@@ -33,11 +33,11 @@ variable "JAVA_LATEST" { default = "26" }
 
 variable "LOCAL" { default = true }
 
-# The publish workflow builds each platform on its own runner and pushes the
-# result by digest, untagged; a merge job then joins the digests into the
-# manifest list and tags that. The image exporter takes tags or push-by-digest,
-# so this switch trades one for the other.
-variable "PUSH_BY_DIGEST" { default = false }
+# The timestamp tag a publish adds beside latest, yyyy.mm.dd.hhmm in UTC. Passed
+# in by the publish workflow; a local build leaves it empty and tags only
+# latest. Year-first so the tags sort chronologically, which is the order
+# Dependabot ranks candidates in when it moves the agents' pin.
+variable "BASE_TAG" { default = "" }
 
 # Debian packages installed in every image. Kept sorted; the Dockerfile expects
 # a single space-separated string, so the list is joined where it is passed in.
@@ -122,8 +122,8 @@ target "base" {
 
   target = "jdk"
 
-  tags = PUSH_BY_DIGEST ? [] : ["${REGISTRY}/${NAMESPACE}/agent-base:latest"]
-  output = PUSH_BY_DIGEST ? [
-    "type=image,name=${REGISTRY}/${NAMESPACE}/agent-base,push-by-digest=true,name-canonical=true,push=true"
-  ] : []
+  tags = concat(
+    ["${REGISTRY}/${NAMESPACE}/agent-base:latest"],
+    BASE_TAG == "" ? [] : ["${REGISTRY}/${NAMESPACE}/agent-base:${BASE_TAG}"],
+  )
 }

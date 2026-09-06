@@ -174,7 +174,7 @@ jobs:
           # Reads main's cache but writes none: a pull request's cache is scoped
           # to its own branch, so writing it would only burn the quota.
           set: |
-            base.cache-from=type=gha,scope=base-${{ matrix.platform }}
+            base.cache-from=type=gha,scope=base
 
       - name: smoke test the base
         if: needs.select.outputs.base == 'true'
