@@ -87,6 +87,8 @@ agent() {
 	local project_path="$2"
 	shift 2
 	docker run --pull always --rm -it \
+	--cap-drop ALL --security-opt no-new-privileges \
+	--pids-limit 4096 --memory 8g \
 	-v "${tool}_home:/home/agent" \
 	-v "${project_path}:/workspace" \
 	-w /workspace \
@@ -108,6 +110,14 @@ your shell, so a project's own `.sdkmanrc` still decides when you do not.
 The `${tool}_home` volume persists agent configuration and credentials between
 runs. Toolchains and the agent CLIs themselves live outside `/home/agent`, so
 they always come from the image and are refreshed by `--pull always`.
+
+The agent inside executes whatever the workspace and the model between them
+decide. Dropping every capability and forbidding privilege gain keeps that
+confined to the container; the pid and memory caps are sized for a Maven build,
+so raise them if yours needs more. Network egress is not restricted: the CLIs
+need their APIs and the toolchains their registries, and which to allow is your
+call. Attach the container to a user-defined network (`docker network create`,
+then `--network`) and filter it with the host firewall.
 
 [`shell-helper/agents.sh`](shell-helper/agents.sh) has fuller `claude`, `codex`
 and `gemini` wrappers to source from the same rc file: a config volume per CLI,

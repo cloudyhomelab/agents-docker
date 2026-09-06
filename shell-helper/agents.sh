@@ -17,6 +17,13 @@
 #     JAVA_VERSION=17 claude . --resume
 #     CODEX_IMAGE_TAG=0.152.0 codex ~/some/project
 #
+# The container runs with every capability dropped, no-new-privileges and a
+# pid and memory cap: the agent inside executes whatever the workspace and the
+# model between them decide, and that should stay the container's problem.
+# AGENT_MEMORY raises the memory cap for a build that needs more.
+#
+#     AGENT_MEMORY=16g claude .
+#
 # The first argument is always the workspace, so there is no bare form:
 # `claude --version` fails the directory check; write `claude . --version`.
 #
@@ -85,6 +92,10 @@ _agent_run() {
         --rm
         -it
         --pull always
+        --cap-drop ALL
+        --security-opt no-new-privileges
+        --pids-limit 4096
+        --memory "${AGENT_MEMORY:-8g}"
         "${config[@]}"
         -v "${workspace_abs}:/workspace"
         "${maven[@]}"
