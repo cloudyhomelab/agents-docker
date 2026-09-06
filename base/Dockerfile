@@ -11,9 +11,10 @@
 #====================
 # base layer
 #====================
-# A floating tag on purpose: a digest pin would hold the base, and its security
-# updates, at whatever was current the day someone last bumped it.
-FROM debian:13-slim AS base
+# Pinned by digest so both platform builds start from the same Debian even when
+# the tag moves between them; Dependabot moves the digest when the tag does.
+# The apt upgrade below is what carries Debian's updates in between.
+FROM debian:13-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132 AS base
 ARG PACKAGES
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -24,6 +25,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # the setting that keeps the downloads replaces it.
 # -f so an apt pattern such as linux-headers-* is not filesystem-matched before
 # apt sees it.
+# upgrade, because the digest pin above holds what Debian preinstalled at
+# whatever the tag carried; this layer is already unreproducible by choice
+# (PACKAGES is unpinned, see .hadolint.yaml), so the upgrade costs nothing the
+# layer still had.
 # Nothing in the image switches user, so the setuid and setgid bits on su,
 # mount, passwd and the rest are only a way up for a session talked into them.
 # Stripped rather than the packages removed, which the base cannot lose; in
@@ -34,6 +39,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache \
     && set -f \
     && apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ${PACKAGES} \
     && find / -xdev -perm /6000 -type f -exec chmod a-s '{}' +
 

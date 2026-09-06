@@ -4,6 +4,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 version: 2
+
+# Dependabot lists tags with its own identity and would otherwise share the
+# anonymous rate limit; these are Dependabot secrets, set separately from the
+# Actions ones.
+registries:
+  dockerhub:
+    type: docker-registry
+    url: https://registry.hub.docker.com
+    username: ${{ secrets.DOCKERHUB_USERNAME }}
+    password: ${{ secrets.DOCKERHUB_TOKEN }}
+
 updates:
   # Workflow actions are pinned to commit SHAs; Dependabot rewrites the SHA and
   # the trailing version comment together, so the tag can never be re-pointed
@@ -18,3 +29,15 @@ updates:
     groups:
       github-actions:
         patterns: ['*']
+
+  # base/ pins Debian by digest; Dependabot moves the digest when the tag does,
+  # and the pull request it opens is a base change like any other.
+  - package-ecosystem: docker
+    directories:
+      - /base
+    registries:
+      - dockerhub
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: chore
