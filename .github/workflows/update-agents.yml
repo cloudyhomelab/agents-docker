@@ -46,6 +46,7 @@ jobs:
           set -euo pipefail
 
           ./.github/scripts/check-updates.sh
+          ./.github/scripts/check-base-updates.sh
 
           # An empty log means nothing moved, and the outputs below stay unset
           # so the next step skips rather than describing a bump that is not
@@ -69,12 +70,13 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
           # One label per bumped agent, which is what decides the images the
-          # build publishes once this is merged. Newline separated, because the
-          # path rules in .github/labeler.yml deliberately skip this branch and
-          # these labels are all it will carry.
+          # build publishes once this is merged; a base bump is every agent.
+          # Newline separated, because the path rules in .github/labeler.yml
+          # deliberately skip this branch and these labels are all it will
+          # carry.
           {
             echo 'labels<<BUMP_LABELS'
-            awk '{ print $1 }' "${BUMP_LOG}"
+            awk '$1 == "base" { print "claude\ncodex\ngemini"; next } { print $1 }' "${BUMP_LOG}" | sort -u
             echo 'BUMP_LABELS'
           } >> "${GITHUB_OUTPUT}"
 
