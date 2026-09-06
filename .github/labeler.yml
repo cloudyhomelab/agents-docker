@@ -13,14 +13,23 @@
 # below. A Dockerfile change accompanied by a README tweak still builds; a
 # README-only change does not.
 #
-# Only ever all three or none. Which agent a docker-bake.hcl edit affects is a
-# question about lines rather than paths, so the version bump pull request
-# labels itself instead and .github/workflows/pr.yml skips it here.
+# The agent labels are only ever all three or none. Which agent a
+# docker-bake.hcl edit affects is a question about lines rather than paths, so
+# the version bump pull request labels itself instead and
+# .github/workflows/pr.yml skips it here.
+#
+# base/ is the one directory with its own label and its own publish; it is
+# excluded below so a base change is a base change alone.
+base:
+  - changed-files:
+      - any-glob-to-any-file: "base/**"
+
 claude: &build-inputs
   - all:
       - changed-files:
           - all-globs-to-any-file:
               - "!.github/**"
+              - "!base/**"
               - "!docs/**"
               - "!shell-helper/**"
               - "!tests/**"

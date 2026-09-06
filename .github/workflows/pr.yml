@@ -28,6 +28,7 @@ jobs:
 
     outputs:
       agents: ${{ steps.select.outputs.agents }}
+      base: ${{ steps.select.outputs.base }}
       cache: ${{ steps.select.outputs.cache }}
 
     steps:
@@ -53,18 +54,23 @@ jobs:
           # Filtered against the known agents, so an unrelated label such as
           # dependencies can never become a build target.
           agents=""
+          base="false"
           for label in ${LABELS//,/ }; do
             case "${label}" in
               claude | codex | gemini) agents="${agents:+${agents},}${label}" ;;
+              base) base="true" ;;
             esac
           done
 
-          if [[ -z ${agents} ]]; then
-            echo "no agent labels; nothing to verify"
+          targets="${agents}"
+          [[ ${base} == false ]] || targets="${targets:+${targets},}base"
+          if [[ -z ${targets} ]]; then
+            echo "no build labels; nothing to verify"
           else
-            echo "verifying: ${agents}"
+            echo "verifying: ${targets}"
           fi
           echo "agents=${agents}" >> "${GITHUB_OUTPUT}"
+          echo "base=${base}" >> "${GITHUB_OUTPUT}"
 
           # Matches the scopes the publish workflow writes, one per agent. Each
           # scope holds both platforms' layers, so the arm64 build reads the
@@ -89,10 +95,12 @@ jobs:
       - name: checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: lint the dockerfile
+      # recursive, so base/Dockerfile is linted alongside the agents' one.
+      - name: lint the dockerfiles
         uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: Dockerfile
+          recursive: true
           config: .hadolint.yaml
 
       # The same file list as the pre-commit hook runs, glob included, so a
@@ -120,7 +128,7 @@ jobs:
     needs:
       - select
       - lint
-    if: needs.select.outputs.agents != ''
+    if: needs.select.outputs.agents != '' || needs.select.outputs.base == 'true'
 
     strategy:
       # A fault in one platform should leave the other's result visible, so
@@ -147,12 +155,37 @@ jobs:
         with:
           driver: docker-container
 
-      # Proves the toolchain and agent CLI versions actually install before they
-      # reach main. push is false, and LOCAL keeps the build to the host
-      # platform, which is also what lets load work: the docker-container
-      # driver discards a build that is neither pushed nor loaded, and a
-      # multi-platform one cannot be loaded at all.
-      - name: build without publishing
+      # Proves the toolchain versions actually install before they reach main,
+      # reading the cache the base publish writes for this platform. push is
+      # false, and LOCAL keeps the build to the host platform, which is also
+      # what lets load work: the docker-container driver discards a build that
+      # is neither pushed nor loaded, and a multi-platform one cannot be loaded
+      # at all.
+      - name: build the base without publishing
+        if: needs.select.outputs.base == 'true'
+        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
+        env:
+          LOCAL: true
+        with:
+          files: base/docker-bake.hcl
+          targets: base
+          push: false
+          load: true
+          # Reads main's cache but writes none: a pull request's cache is scoped
+          # to its own branch, so writing it would only burn the quota.
+          set: |
+            base.cache-from=type=gha,scope=base
+
+      - name: smoke test the base
+        if: needs.select.outputs.base == 'true'
+        env:
+          BAKE_FILE: base/docker-bake.hcl
+        run: .github/scripts/smoke-test.sh base
+
+      # Proves the agent CLI versions actually install before they reach main,
+      # under the same conditions as above.
+      - name: build the agents without publishing
+        if: needs.select.outputs.agents != ''
         uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         env:
           BUILD_AGENTS: ${{ needs.select.outputs.agents }}
@@ -169,7 +202,8 @@ jobs:
       # The build proves the layers assemble; this proves the toolchain and the
       # agent CLI in the result actually start, and puts the versions it found
       # in the job summary, one table per image.
-      - name: smoke test the built images
+      - name: smoke test the built agents
+        if: needs.select.outputs.agents != ''
         env:
           AGENTS: ${{ needs.select.outputs.agents }}
         run: |

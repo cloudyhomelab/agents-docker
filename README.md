@@ -122,6 +122,9 @@ cosign verify \
 
 Substitute `codex` or `gemini` for `claude`, and a version tag for `latest`.
 Tags published before the workflow was renamed carry its old name, `build.yml`.
+`docker.io/binarycodes/agent-base`, the toolchain image the agents are built
+on, is signed the same way by `publish-base.yml`; substitute that file name in
+the identity.
 
 The identity stops at `@refs/` because the ref depends on how the run was
 triggered, a merged pull request or a manual `workflow_dispatch`. The repository
@@ -164,6 +167,14 @@ Check that a built image actually runs, as the pull request workflow does:
 
 These build for the host platform only. The published images are multi-platform,
 which needs a `docker-container` builder and `LOCAL=false` in the environment.
+
+The toolchains under the agents are their own image, `agent-base`, built from
+`base/` with its own bake file, from the repository root as well:
+
+```bash
+docker buildx bake -f base/docker-bake.hcl
+BAKE_FILE=base/docker-bake.hcl .github/scripts/smoke-test.sh base
+```
 
 Run the tests for the entrypoint and the update script, which need no image:
 

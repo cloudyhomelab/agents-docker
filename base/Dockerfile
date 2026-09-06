@@ -2,28 +2,19 @@
 # GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Declarations only -- no FROM interpolates these and every stage redeclares
-# what it uses. They are here because one bake target passes all three agent
-# versions to every agent build, which reaches just one of the CLI stages, and
-# an arg no reached stage declares is one BuildKit warns about.
-ARG CLAUDE_VERSION
-ARG CODEX_VERSION
-ARG GEMINI_VERSION
-ARG GO_VERSION
-ARG HADOLINT_VERSION
-ARG JAVA_VERSIONS
-ARG JAVA_LTS
-ARG JAVA_LATEST
-ARG PACKAGES
-ARG PIP_PACKAGES
+# The toolchain stages, published as agent-base. The agent Dockerfile at the
+# repository root builds FROM the published image, so a change here is a base
+# publish and the agents follow through their pin. Inputs are in the bake file
+# beside this one.
 
 
 #====================
 # base layer
 #====================
-# A floating tag on purpose: a digest pin would hold the base, and its security
-# updates, at whatever was current the day someone last bumped it.
-FROM debian:13-slim AS base
+# Pinned by digest so both platform builds start from the same Debian even when
+# the tag moves between them; Dependabot moves the digest when the tag does.
+# The apt upgrade below is what carries Debian's updates in between.
+FROM debian:13-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132 AS base
 ARG PACKAGES
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -34,6 +25,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # the setting that keeps the downloads replaces it.
 # -f so an apt pattern such as linux-headers-* is not filesystem-matched before
 # apt sees it.
+# upgrade, because the digest pin above holds what Debian preinstalled at
+# whatever the tag carried; this layer is already unreproducible by choice
+# (PACKAGES is unpinned, see .hadolint.yaml), so the upgrade costs nothing the
+# layer still had.
 # Nothing in the image switches user, so the setuid and setgid bits on su,
 # mount, passwd and the rest are only a way up for a session talked into them.
 # Stripped rather than the packages removed, which the base cannot lose; in
@@ -44,6 +39,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache \
     && set -f \
     && apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ${PACKAGES} \
     && find / -xdev -perm /6000 -type f -exec chmod a-s '{}' +
 
@@ -212,65 +208,3 @@ ENV NPM_CONFIG_PREFIX=/home/agent/.npm-global
 ENV PATH="/home/agent/.npm-global/bin:${PATH}"
 
 RUN install -d -o agent -g agent /home/agent/.npm-global
-
-
-#====================
-# runtime
-#====================
-# Its own stage above the toolchains: the entrypoint changes on the agents'
-# cadence, and the stages above are what becomes the published base.
-FROM jdk AS runtime
-
-COPY --chmod=0755 scripts/agent-entrypoint /usr/local/bin/agent-entrypoint
-ENTRYPOINT ["/usr/local/bin/agent-entrypoint"]
-
-
-#====================
-# claude
-#====================
-FROM runtime AS claude
-ARG CLAUDE_VERSION
-
-# The installer is ${HOME}-relative and its launcher is an absolute symlink, so
-# a throwaway HOME relocates the whole install out of the agent's home volume.
-RUN HOME=/opt/claude bash -o pipefail -c 'curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "https://claude.ai/install.sh" | bash -s "${CLAUDE_VERSION}"' \
-    && ln -s /opt/claude/.local/bin/claude /usr/local/bin/claude \
-    && chmod -R a+rX /opt/claude \
-    && install -d -o agent -g agent /home/agent/.claude
-
-USER 1000
-WORKDIR /home/agent
-CMD ["claude"]
-
-
-#====================
-# codex
-#====================
-FROM runtime AS codex
-ARG CODEX_VERSION
-
-# A cache mount rather than a post-install `npm cache clean`: either keeps the
-# cache out of the layer, but this one survives into the next build. Locked,
-# because the codex and gemini stages install in parallel and share it.
-RUN --mount=type=cache,target=/root/.npm,sharing=locked \
-    npm install -g --prefix /usr/local @openai/codex@"${CODEX_VERSION}" \
-    && install -d -o agent -g agent /home/agent/.codex
-
-USER 1000
-WORKDIR /home/agent
-CMD ["codex"]
-
-
-#====================
-# gemini
-#====================
-FROM runtime AS gemini
-ARG GEMINI_VERSION
-
-RUN --mount=type=cache,target=/root/.npm,sharing=locked \
-    npm install -g --prefix /usr/local @google/gemini-cli@"${GEMINI_VERSION}" \
-    && install -d -o agent -g agent /home/agent/.gemini
-
-USER 1000
-WORKDIR /home/agent
-CMD ["gemini"]

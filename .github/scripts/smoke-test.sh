@@ -3,10 +3,10 @@
 # GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Runs the image each named agent target built and checks that every toolchain
-# in it starts. A build proves the layers assemble; this proves the result
-# works, so a JDK that cannot run or an agent CLI that will not start is caught
-# before it is published.
+# Runs the image each named bake target built -- an agent, or base -- and
+# checks that every toolchain in it starts. A build proves the layers assemble;
+# this proves the result works, so a JDK that cannot run or an agent CLI that
+# will not start is caught before it is published.
 #
 # Every check runs even after one has failed, so the table written per agent --
 # to the job summary under Actions, to stdout elsewhere -- is complete, and the
@@ -15,13 +15,15 @@
 # table is all that stdout carries.
 #
 # Run from the repository root after a bake that left the images in the local
-# docker daemon: a plain `docker buildx bake`, or one with --load.
+# docker daemon: a plain `docker buildx bake`, or one with --load. BAKE_FILE
+# names the bake file the targets come from; the base has its own.
 #
-#   smoke-test.sh <agent>...
+#   smoke-test.sh <target>...
+#   BAKE_FILE=base/docker-bake.hcl smoke-test.sh base
 
 set -euo pipefail
 
-BAKE_FILE="docker-bake.hcl"
+BAKE_FILE="${BAKE_FILE:-docker-bake.hcl}"
 SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 
 fail() {
@@ -29,7 +31,7 @@ fail() {
   exit 1
 }
 
-[[ $# -gt 0 ]] || fail "usage: smoke-test.sh <agent>..."
+[[ $# -gt 0 ]] || fail "usage: smoke-test.sh <target>..."
 [[ -f ${BAKE_FILE} ]] || fail "no ${BAKE_FILE} here; run this from the repository root"
 
 # One row per check: the label the table shows, then the command run in the
@@ -125,7 +127,8 @@ for agent in "$@"; do
     run_check "${image}" "jdk ${jdk}" "/opt/java/${jdk}/bin/java -version"
   done
 
-  run_check "${image}" "${agent}" "${agent} --version"
+  # The base carries the toolchains and no CLI of its own.
+  [[ ${agent} == base ]] || run_check "${image}" "${agent}" "${agent} --version"
 
   # -V so the jdk rows go 8, 11, 17 rather than 11, 17, 8, with the two aliases
   # after the numbers; C locale so the order does not depend on the runner.

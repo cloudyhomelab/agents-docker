@@ -31,7 +31,7 @@ else
 fi
 
 if command -v hadolint >/dev/null 2>&1; then
-    hadolint --config .hadolint.yaml Dockerfile || status=1
+    hadolint --config .hadolint.yaml Dockerfile base/Dockerfile || status=1
 else
     echo "pre-commit: hadolint is not installed; skipping it" >&2
 fi
