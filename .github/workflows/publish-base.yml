@@ -102,8 +102,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # One scope with one writer, so the ignore-error the agent publish needs
-      # for its racing targets is not needed here.
+      # ignore-error, because the cache export races with itself even for one
+      # target: the two platforms produce some byte-identical layers, the blobs
+      # are keyed by digest alone, and the second writer fails with "failed to
+      # reserve cache", which without this cancels the push too. A lost cache
+      # write costs the next build time; a lost publish costs the base.
       - name: build and push
         id: bake
         uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
@@ -117,7 +120,7 @@ jobs:
           push: true
           set: |
             base.cache-from=type=gha,scope=base
-            base.cache-to=type=gha,mode=max,scope=base
+            base.cache-to=type=gha,mode=max,scope=base,ignore-error=true
             ${{ steps.name.outputs.no-cache }}
             *.attest=type=provenance,mode=max
             *.attest=type=sbom,generator=docker/scout-sbom-indexer:latest
