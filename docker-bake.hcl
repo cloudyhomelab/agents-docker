@@ -10,30 +10,15 @@ variable "NAMESPACE"  { default = "binarycodes" }
 # leaves it empty, which is the honest answer for a working tree.
 variable "REVISION" { default = "" }
 
+# The base the agents are built on: the tag for the reader, the digest for the
+# build. check-base-updates.sh moves both to the newest tag the base publish
+# has landed; the publish workflow passes them on as the OCI base labels.
+variable "BASE_TAG" { default = "latest" }
+variable "BASE_DIGEST" { default = "" }
+
 variable "CLAUDE_VERSION" { default = "2.1.263" }
 variable "CODEX_VERSION" { default = "0.153.4" }
 variable "GEMINI_VERSION" { default = "0.58.0" }
-
-variable "GO_VERSION" { default = "1.27.0" }
-
-variable "HADOLINT_VERSION" { default = "2.15.1" }
-
-# Every major listed here is installed; the entrypoint activates one per run.
-variable "JAVA_VERSIONS" {
-  type = list(string)
-  default = [
-    "8.0.502.fx-zulu",
-    "11.0.32.fx-zulu",
-    "17.0.20.fx-zulu",
-    "21.0.12.fx-zulu",
-    "25.0.4.fx-zulu",
-    "26.0.2.fx-zulu",
-  ]
-}
-
-# Majors from the list above, exposed as the /opt/java/lts and /opt/java/latest aliases.
-variable "JAVA_LTS" { default = "25" }
-variable "JAVA_LATEST" { default = "26" }
 
 variable "LOCAL" { default = true }
 
@@ -53,72 +38,15 @@ function "agent_version" {
   }[name]
 }
 
-# Debian packages installed in every image. Kept sorted; the Dockerfile expects
-# a single space-separated string, so the list is joined where it is passed in.
-variable "PACKAGES" {
-  type = list(string)
-  default = [
-    "bash",
-    "bats",
-    "build-essential", # cgo, native pip wheels, node-gyp
-    "ca-certificates",
-    "curl",
-    "git",
-    "jq",
-    "make",
-    "ncurses-term",
-    "nodejs",
-    "npm",
-    "python3",
-    "python3-dev", # building C extensions from source
-    "python3-pip",
-    "python3-venv",
-    "ripgrep",
-    "shellcheck",
-    "terminfo",
-    "unzip",
-    "zip",
-  ]
-}
-
-# Python tooling, installed into one shared venv. Ansible is here rather than in
-# PACKAGES so its version is ours to choose instead of being whatever Debian
-# ships, and so molecule resolves against the same ansible-core it will run.
-# Every entry is pinned, so rebuilding an old tag gets the same pip versions
-# rather than whatever pip resolves that day. The apt packages in PACKAGES are
-# deliberately not pinned, so the image as a whole is not reproducible.
-# Kept sorted; joined into one space-separated string where it is passed in,
-# like PACKAGES.
-variable "PIP_PACKAGES" {
-  type = list(string)
-  default = [
-    "ansible==14.3.1", # the community bundle, not just ansible-core
-    "ansible-lint==26.8.0",
-    "antsibull-changelog==0.35.1",
-    "molecule==26.8.0",
-    # The driver only; `molecule test` additionally needs a podman binary,
-    # which the image deliberately does not carry.
-    "molecule-plugins[podman]==26.7.15",
-  ]
-}
-
-target "common" {
-  args = {
-    PACKAGES = join(" ", PACKAGES)
-    PIP_PACKAGES = join(" ", PIP_PACKAGES)
-  }
-
-  platforms = LOCAL ? [] : ["linux/amd64", "linux/arm64"]
-}
-
 group "default" {
   targets = ["agent"]
 }
 
 target "agent" {
-  inherits = ["common"]
   context = "."
   dockerfile = "Dockerfile"
+
+  platforms = LOCAL ? [] : ["linux/amd64", "linux/arm64"]
 
   matrix = {
     agent = BUILD_AGENTS
@@ -135,17 +63,15 @@ target "agent" {
     "org.opencontainers.image.source"      = "https://github.com/cloudyhomelab/agents-docker"
     "org.opencontainers.image.revision"    = REVISION
     "org.opencontainers.image.licenses"    = "GPL-3.0-or-later"
+    "org.opencontainers.image.base.name"   = "${REGISTRY}/${NAMESPACE}/agent-base:${BASE_TAG}"
+    "org.opencontainers.image.base.digest" = BASE_DIGEST
   }
 
   args = {
+    BASE_IMAGE = "${REGISTRY}/${NAMESPACE}/agent-base:${BASE_TAG}${BASE_DIGEST == "" ? "" : "@${BASE_DIGEST}"}"
     CLAUDE_VERSION = CLAUDE_VERSION
     CODEX_VERSION = CODEX_VERSION
     GEMINI_VERSION = GEMINI_VERSION
-    GO_VERSION = GO_VERSION
-    HADOLINT_VERSION = HADOLINT_VERSION
-    JAVA_VERSIONS = join(" ", JAVA_VERSIONS)
-    JAVA_LTS = JAVA_LTS
-    JAVA_LATEST = JAVA_LATEST
   }
 
   target = agent
