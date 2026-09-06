@@ -6,6 +6,15 @@ name: publish base image
 
 on:
   workflow_dispatch:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+  # Weekly, for the Debian updates the apt layer would otherwise wait on; the
+  # scheduled run rebuilds that layer without cache, see below.
+  schedule:
+    - cron: "0 3 * * 1"
 
 # One group for every trigger, so two runs can never race on :latest.
 concurrency:
@@ -21,7 +30,12 @@ jobs:
   # points at the pushed layers until the merge job has both digests, so a
   # platform that fails its smoke test leaves :latest where it was.
   build:
-    if: github.ref_name == 'main'
+    # A merge publishes only when the pull request was labelled base; a dispatch
+    # or the schedule only from main. merged is only ever set on the pull
+    # request path, whose ref is the request's own merge ref.
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.merged && contains(github.event.pull_request.labels.*.name, 'base'))
+      || (github.event_name != 'pull_request' && github.ref_name == 'main')
 
     strategy:
       # A fault in one platform should leave the other's result visible, so
@@ -42,6 +56,10 @@ jobs:
     steps:
       - name: checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit, not the pull request head: a squash merge leaves
+          # the head off main entirely and its branch is often deleted.
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.ref }}
 
       - name: set up docker buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
@@ -56,13 +74,17 @@ jobs:
         uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7.3.0
         env:
           LOCAL: true
-          REVISION: ${{ github.sha }}
+          REVISION: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
         with:
           files: base/docker-bake.hcl
           targets: base
           load: true
+          # The scheduled run drops the cache for the apt stage, and with it
+          # every stage above, so Debian's updates actually land; everything
+          # else relies on the cache as usual.
           set: |
             base.cache-from=type=gha,scope=base-${{ matrix.platform }}
+            ${{ github.event_name == 'schedule' && 'base.no-cache-filter=base' || '' }}
 
       - name: smoke test the base
         env:
@@ -85,13 +107,14 @@ jobs:
         env:
           LOCAL: true
           PUSH_BY_DIGEST: true
-          REVISION: ${{ github.sha }}
+          REVISION: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
         with:
           files: base/docker-bake.hcl
           targets: base
           set: |
             base.cache-from=type=gha,scope=base-${{ matrix.platform }}
             base.cache-to=type=gha,mode=max,scope=base-${{ matrix.platform }}
+            ${{ github.event_name == 'schedule' && 'base.no-cache-filter=base' || '' }}
             *.attest=type=provenance,mode=max
             *.attest=type=sbom,generator=docker/scout-sbom-indexer:latest
 
