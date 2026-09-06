@@ -207,6 +207,14 @@ ENV PATH="/home/agent/.npm-global/bin:${PATH}"
 
 RUN install -d -o agent -g agent /home/agent/.npm-global
 
+
+#====================
+# runtime
+#====================
+# Its own stage above the toolchains: the entrypoint changes on the agents'
+# cadence, and the stages above are what becomes the published base.
+FROM jdk AS runtime
+
 COPY --chmod=0755 scripts/agent-entrypoint /usr/local/bin/agent-entrypoint
 ENTRYPOINT ["/usr/local/bin/agent-entrypoint"]
 
@@ -214,7 +222,7 @@ ENTRYPOINT ["/usr/local/bin/agent-entrypoint"]
 #====================
 # claude
 #====================
-FROM jdk AS claude
+FROM runtime AS claude
 ARG CLAUDE_VERSION
 
 # The installer is ${HOME}-relative and its launcher is an absolute symlink, so
@@ -232,7 +240,7 @@ CMD ["claude"]
 #====================
 # codex
 #====================
-FROM jdk AS codex
+FROM runtime AS codex
 ARG CODEX_VERSION
 
 # A cache mount rather than a post-install `npm cache clean`: either keeps the
@@ -250,7 +258,7 @@ CMD ["codex"]
 #====================
 # gemini
 #====================
-FROM jdk AS gemini
+FROM runtime AS gemini
 ARG GEMINI_VERSION
 
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
