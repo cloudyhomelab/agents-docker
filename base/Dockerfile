@@ -190,6 +190,12 @@ test -d "${SDKMAN_DIR}/candidates/maven/current" || fail "missing maven: ${SDKMA
 chmod -R a+rX /opt
 EOF
 
+# The LTS alias as the image's default, so java and mvn work in a plain
+# `docker run`; the entrypoint re-exports both per run when a session asks for
+# another major, and its bin directory then precedes this one on PATH.
+ENV JAVA_HOME="/opt/java/lts"
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+
 ENV M2_HOME="${SDKMAN_DIR}/candidates/maven/current"
 ENV PATH="${M2_HOME}/bin:${PATH}"
 
