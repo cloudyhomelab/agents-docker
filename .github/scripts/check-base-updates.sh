@@ -10,16 +10,8 @@
 # Run from the repository root. Set BUMP_LOG to collect the bump; a local run
 # can leave it unset and the log is discarded.
 
-# check-updates.sh rewrites the agent pins; its bump_version and scratch
-# handling are reused here so both scripts touch the bake file the same way.
-# Its own main stays unrun: it guards on being executed rather than sourced.
-# shellcheck source=.github/scripts/check-updates.sh
-source "$(dirname "${BASH_SOURCE[0]}")/check-updates.sh"
-
-fail() {
-  echo "check-base-updates: $*" >&2
-  exit 1
-}
+# shellcheck source=.github/scripts/check-updates-lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/check-updates-lib.sh"
 
 # The base publish tags yyyy.mm.dd.hhmm in UTC, so the newest tag is the
 # greatest one under a plain string sort; latest and anything else on the

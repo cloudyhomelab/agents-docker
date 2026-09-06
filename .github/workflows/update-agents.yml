@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          ./.github/scripts/check-updates.sh
+          ./.github/scripts/check-agent-updates.sh
           ./.github/scripts/check-base-updates.sh
 
           # An empty log means nothing moved, and the outputs below stay unset

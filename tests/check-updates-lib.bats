@@ -3,11 +3,11 @@
 # GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# The two pure functions of .github/scripts/check-updates.sh: is_version, which
-# decides what may be written into a pin, and bump_version, which rewrites one
-# line of docker-bake.hcl and must touch nothing else.
+# The two pure functions of .github/scripts/check-updates-lib.sh: is_version,
+# which decides what may be written into a pin, and bump_version, which
+# rewrites one line of docker-bake.hcl and must touch nothing else.
 
-source "${BATS_TEST_DIRNAME}/../.github/scripts/check-updates.sh"
+source "${BATS_TEST_DIRNAME}/../.github/scripts/check-updates-lib.sh"
 
 setup() {
   TMP=$(mktemp -d)
@@ -16,7 +16,7 @@ setup() {
   # to the same version, a variable whose name merely starts the same way, and
   # the version quoted in a comment.
   cat > "${BAKE_FILE}" <<'HCL'
-# Bumped by check-updates.sh; CLAUDE_VERSION was "2.1.259" before "2.1.260".
+# Bumped by check-agent-updates.sh; CLAUDE_VERSION was "2.1.259" before "2.1.260".
 variable "CLAUDE_VERSION" { default = "2.1.260" }
 variable "CLAUDE_VERSION_PREVIOUS" { default = "2.1.260" }
 variable "CODEX_VERSION" { default = "0.153.2" }
