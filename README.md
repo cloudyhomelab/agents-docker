@@ -150,12 +150,18 @@ same ref. The repository and the workflow file -- the parts that carry the trust
 -- are still anchored exactly, and `cosign verify` prints the full identity it
 matched, so pin it further once you have seen what your tag actually carries.
 
-The build also attaches SBOM and provenance attestations, which say what went
-into the image rather than who built it:
+The signature is on the image index, which also carries the SLSA provenance and
+SBOM attestations the build attached. The provenance says what was built rather
+than who built it: the source repository and commit, the `Dockerfile` and the
+build arguments, so a pulled image can be matched to a commit here and to the
+versions `docker-bake.hcl` pinned at it.
 
 ```bash
-docker buildx imagetools inspect docker.io/binarycodes/claude:latest
+docker buildx imagetools inspect docker.io/binarycodes/claude:latest \
+  --format '{{ json .Provenance }}'
 ```
+
+`{{ json .SBOM }}` prints the SBOM the same way.
 
 ## Build Locally
 
