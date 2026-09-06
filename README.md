@@ -1,12 +1,6 @@
 # Agent CLI Docker Images
 
-This repository builds and publishes Docker images for three AI agent CLIs:
-
-- `claude`
-- `codex`
-- `gemini`
-
-Images are published on Docker Hub under:
+Docker images for three AI agent CLIs, published on Docker Hub:
 
 - `docker.io/binarycodes/claude`
 - `docker.io/binarycodes/codex`
@@ -51,63 +45,60 @@ java=17
 
 ## Quick Start
 
-### Run the CLI directly:
+Run the CLI directly, substituting `codex` or `gemini` for `claude`:
 
-#### Claude
 ```bash
 docker run --rm -it docker.io/binarycodes/claude:latest
 ```
 
-#### Codex
-```bash
-docker run --rm -it docker.io/binarycodes/codex:latest
-```
-
-#### Gemini
-```bash
-docker run --rm -it docker.io/binarycodes/gemini:latest
-```
-
-### Run with your current project mounted:
+With your current project mounted:
 
 ```bash
 docker run --rm -it \
   -v "$PWD:/workspace" \
   -w /workspace \
-  docker.io/binarycodes/codex:latest
+  docker.io/binarycodes/claude:latest
 ```
 
 ### Shell helper function
-Add to your shell rc file such as `~/.bashrc` or `~/.zshrc`
+
+Add to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
 agent() {
-	[[ $# -lt 2 ]] && { echo "usage: agent <tool> <project_path> [agent args...]"; return 1; }
-	local tool="$1"
-	local project_path="$2"
-	shift 2
-	docker run --pull always --rm -it \
-	-v "${tool}_home:/home/agent" \
-	-v "${project_path}:/workspace" \
-	-w /workspace \
-	-e JAVA_VERSION \
-	"docker.io/binarycodes/${tool}:latest" "$@"
+  [[ $# -lt 2 ]] && { echo "usage: agent <tool> <project_path> [agent args...]"; return 1; }
+  local tool="$1"
+  local project_path="$2"
+  shift 2
+  docker run --pull always --rm -it \
+    --cap-drop ALL --security-opt no-new-privileges \
+    --pids-limit 4096 --memory 8g \
+    -v "${tool}_home:/home/agent" \
+    -v "${project_path}:/workspace" \
+    -w /workspace \
+    -e JAVA_VERSION \
+    "docker.io/binarycodes/${tool}:latest" "$@"
 }
 ```
 
-Examples:
-
 ```bash
-agent codex "/path/to/workspace"
-JAVA_VERSION=17 agent codex "/path/to/workspace"
+agent codex /path/to/workspace
+JAVA_VERSION=17 agent codex /path/to/workspace
 ```
 
 `-e JAVA_VERSION` with no value forwards the variable only when it is set in
 your shell, so a project's own `.sdkmanrc` still decides when you do not.
 
 The `${tool}_home` volume persists agent configuration and credentials between
-runs. Toolchains and the agent CLIs themselves live outside `/home/agent`, so
-they always come from the image and are refreshed by `--pull always`.
+runs. Toolchains and the agent CLIs live outside `/home/agent`, so they always
+come from the image and are refreshed by `--pull always`.
+
+The agent inside runs whatever the workspace and the model decide, so the
+container gets no capabilities and no privilege gain, and a pid and memory cap
+sized for a Maven build; raise them if yours needs more. Network egress is not
+restricted, since which APIs and registries to allow is your call: attach the
+container to a user-defined network (`docker network create`, then `--network`)
+and filter it with the host firewall.
 
 [`shell-helper/agents.sh`](shell-helper/agents.sh) has fuller `claude`, `codex`
 and `gemini` wrappers to source from the same rc file: a config volume per CLI,
@@ -117,8 +108,8 @@ separate volumes per cache, the host Maven repository shared when it exists, and
 ## Verifying the Images
 
 Every published image is signed with [cosign](https://github.com/sigstore/cosign)
-in keyless mode, so there is no public key to distribute -- the signature is tied
-to the workflow run that produced it. Verifying asserts that the image really was
+in keyless mode, so there is no public key to distribute: the signature is tied
+to the workflow run that produced it, and verifying asserts that the image was
 built by `.github/workflows/publish.yml` in this repository:
 
 ```bash
@@ -130,34 +121,32 @@ cosign verify \
 ```
 
 Substitute `codex` or `gemini` for `claude`, and a version tag for `latest`.
-Tags published before the workflow was renamed carry its old name,
-`build.yml`, in the identity instead.
+Tags published before the workflow was renamed carry its old name, `build.yml`.
 
-The identity is a regular expression that stops at `@refs/` rather than pinning
-one ref, because the ref a run signs under depends on how it was triggered: the
-usual path is a merged pull request, a manual `workflow_dispatch` is not the
-same ref. The repository and the workflow file -- the parts that carry the trust
--- are still anchored exactly, and `cosign verify` prints the full identity it
-matched, so pin it further once you have seen what your tag actually carries.
+The identity stops at `@refs/` because the ref depends on how the run was
+triggered, a merged pull request or a manual `workflow_dispatch`. The repository
+and workflow file are anchored exactly; `cosign verify` prints the identity it
+matched, so pin it further once you have seen what your tag carries.
 
-The build also attaches SBOM and provenance attestations, which say what went
-into the image rather than who built it:
+The signature is on the image index, which also carries the SLSA provenance and
+SBOM attestations the build attached. The provenance says what was built rather
+than who built it: the source repository and commit, the `Dockerfile` and the
+build arguments, so a pulled image can be matched to a commit here and to the
+versions `docker-bake.hcl` pinned at it.
 
 ```bash
-docker buildx imagetools inspect docker.io/binarycodes/claude:latest
+docker buildx imagetools inspect docker.io/binarycodes/claude:latest \
+  --format '{{ json .Provenance }}'
 ```
+
+`{{ json .SBOM }}` prints the SBOM the same way.
 
 ## Build Locally
 
-Build all default targets:
+Build all default targets, or a single agent:
 
 ```bash
 docker buildx bake
-```
-
-Build a single agent:
-
-```bash
 docker buildx bake claude
 ```
 
@@ -174,7 +163,7 @@ Check that a built image actually runs, as the pull request workflow does:
 ```
 
 These build for the host platform only. The published images are multi-platform,
-that needs a `docker-container` builder and `LOCAL=false` in the environment.
+which needs a `docker-container` builder and `LOCAL=false` in the environment.
 
 Run the tests for the entrypoint and the update script, which need no image:
 
@@ -191,19 +180,14 @@ git config core.hooksPath .githooks
 ```
 
 `pre-commit` then runs the same `shellcheck`, `hadolint` and `bats` checks the
-pull request workflow does, and `commit-msg` checks the message against the
-conventions above. None of the three is required locally -- one that is not
-installed is reported and skipped, and CI remains the enforcement point.
+pull request workflow does, and `commit-msg` requires a single-line
+[Conventional Commits](https://www.conventionalcommits.org) message. None of the three is
+required locally: one that is not installed is reported and skipped, and CI
+remains the enforcement point.
 
 ## License
 
-Copyright (c) 2026 binarycodes
-
-This project is licensed under the GNU General Public License v3.0 or later.
-See [LICENSE](LICENSE), or <https://www.gnu.org/licenses/gpl-3.0.txt>.
-
-Every file that supports comments carries the copyright and
-`SPDX-License-Identifier` header; `LICENSE` and this README state it in prose
-instead.
+Copyright (c) 2026 binarycodes. Licensed under the GNU General Public License
+v3.0 or later; see [LICENSE](LICENSE) or <https://www.gnu.org/licenses/gpl-3.0.txt>.
 
 SPDX-License-Identifier: `GPL-3.0-or-later`

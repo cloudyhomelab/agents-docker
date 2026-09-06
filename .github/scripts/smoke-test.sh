@@ -35,7 +35,9 @@ fail() {
 # One row per check: the label the table shows, then the command run in the
 # container. The per-major JDKs and the agent CLI are added per image below,
 # since they differ between images. Importing ansible from python3 is what
-# proves the python3 on PATH is the venv's and not /usr/bin's.
+# proves the python3 on PATH is the venv's and not /usr/bin's. The setuid row
+# passes on empty output: the base stage strips those bits, and a file that
+# still carries one is listed.
 #
 #      <label>   <command>
 CHECKS=(
@@ -48,6 +50,7 @@ CHECKS=(
   "ripgrep   rg --version"
   "jq        jq --version"
   "hadolint  hadolint --version"
+  "setuid    ! find / -xdev -perm /6000 -type f 2>/dev/null | grep ."
 )
 
 # Looked up through bake rather than assembled from REGISTRY and NAMESPACE here,
@@ -63,11 +66,14 @@ image_for() {
 # pass the test against the wrong image. A fresh container per command rather
 # than docker exec into one, because only a container start goes through the
 # entrypoint, and PATH and JAVA_HOME as a session gets them are part of what is
-# under test.
+# under test. The capability and privilege restrictions are the wrappers', so
+# a CLI that stops starting under them fails here rather than in a session.
 in_image() {
   local image="$1"
   shift
-  docker run --rm --pull never "${image}" "$@"
+  docker run --rm --pull never \
+    --cap-drop ALL --security-opt no-new-privileges \
+    "${image}" "$@"
 }
 
 failures=0
