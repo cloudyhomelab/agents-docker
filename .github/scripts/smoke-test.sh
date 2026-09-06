@@ -35,7 +35,9 @@ fail() {
 # One row per check: the label the table shows, then the command run in the
 # container. The per-major JDKs and the agent CLI are added per image below,
 # since they differ between images. Importing ansible from python3 is what
-# proves the python3 on PATH is the venv's and not /usr/bin's.
+# proves the python3 on PATH is the venv's and not /usr/bin's. The setuid row
+# passes on empty output: the base stage strips those bits, and a file that
+# still carries one is listed.
 #
 #      <label>   <command>
 CHECKS=(
@@ -48,6 +50,7 @@ CHECKS=(
   "ripgrep   rg --version"
   "jq        jq --version"
   "hadolint  hadolint --version"
+  "setuid    ! find / -xdev -perm /6000 -type f 2>/dev/null | grep ."
 )
 
 # Looked up through bake rather than assembled from REGISTRY and NAMESPACE here,

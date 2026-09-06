@@ -34,13 +34,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 # the setting that keeps the downloads replaces it.
 # -f so an apt pattern such as linux-headers-* is not filesystem-matched before
 # apt sees it.
+# Nothing in the image switches user, so the setuid and setgid bits on su,
+# mount, passwd and the rest are only a way up for a session talked into them.
+# Stripped rather than the packages removed, which the base cannot lose; in
+# this layer so the copy-up costs no extra one.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean \
     && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache \
     && set -f \
     && apt-get update \
-    && apt-get install -y --no-install-recommends ${PACKAGES}
+    && apt-get install -y --no-install-recommends ${PACKAGES} \
+    && find / -xdev -perm /6000 -type f -exec chmod a-s '{}' +
 
 # 1000:1000 explicitly, because a bind-mounted workspace carries the host's
 # ownership: the files an agent writes come back out belonging to the person
