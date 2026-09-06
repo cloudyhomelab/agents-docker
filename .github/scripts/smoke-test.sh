@@ -63,11 +63,14 @@ image_for() {
 # pass the test against the wrong image. A fresh container per command rather
 # than docker exec into one, because only a container start goes through the
 # entrypoint, and PATH and JAVA_HOME as a session gets them are part of what is
-# under test.
+# under test. The capability and privilege restrictions are the wrappers', so
+# a CLI that stops starting under them fails here rather than in a session.
 in_image() {
   local image="$1"
   shift
-  docker run --rm --pull never "${image}" "$@"
+  docker run --rm --pull never \
+    --cap-drop ALL --security-opt no-new-privileges \
+    "${image}" "$@"
 }
 
 failures=0
