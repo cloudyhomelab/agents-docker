@@ -89,10 +89,12 @@ jobs:
       - name: checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: lint the dockerfile
+      # recursive, so base/Dockerfile is linted alongside the agents' one.
+      - name: lint the dockerfiles
         uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: Dockerfile
+          recursive: true
           config: .hadolint.yaml
 
       # The same file list as the pre-commit hook runs, glob included, so a
