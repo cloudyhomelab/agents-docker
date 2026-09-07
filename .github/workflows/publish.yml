@@ -158,9 +158,12 @@ jobs:
           ${{ steps.bake.outputs.metadata }}
           JSON
 
-          # Extract tag@digest refs from Bake metadata and sign them.
+          # Extract tag@digest refs from Bake metadata and sign them. Only the
+          # targets are objects: a build with warnings also gets a top-level
+          # buildx.build.warnings array.
           jq -r '
             to_entries[]
+            | select(.value | type == "object")
             | .value as $v
             | ($v["containerimage.digest"] // empty) as $digest
             | ($v["image.name"] // empty) as $names
