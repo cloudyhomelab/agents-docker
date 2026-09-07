@@ -38,6 +38,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      actions: write
 
     steps:
       - name: checkout repository
@@ -156,3 +157,13 @@ jobs:
             echo "Signing ${ref}"
             cosign sign --yes "${ref}"
           done
+
+      # The agents follow through their pin, which the update workflow moves.
+      # Kicked here rather than left to its nightly run, so a new base reaches
+      # the agents within the hour; a dispatch is one of the two events
+      # GITHUB_TOKEN is allowed to raise.
+      - name: bump the agents' base pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run update-agents.yml --ref main

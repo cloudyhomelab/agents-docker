@@ -10,12 +10,8 @@
 # Run from the repository root. Set BUMP_LOG to collect the bumps; a local run
 # can leave it unset and the log is discarded.
 
-BAKE_FILE="docker-bake.hcl"
-
-fail() {
-  echo "check-updates: $*" >&2
-  exit 1
-}
+# shellcheck source=.github/scripts/check-updates-lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/check-updates-lib.sh"
 
 # One row per pinned version: the docker-bake.hcl variable, where to look up
 # the current release, and which project to look up. The label used in output
@@ -74,35 +70,6 @@ latest_version() {
   esac
 }
 
-# Read back through bake rather than by parsing the HCL, so the pin reported
-# here is exactly what a build would see. Every target carries every version
-# arg; asking the agent's own target just keeps the jq path readable.
-current_version() {
-  local target="$1" variable="$2"
-
-  docker buildx bake --file "${BAKE_FILE}" --progress=quiet --print \
-    | jq -r --arg variable "${variable}" ".target.${target}.args[\$variable]"
-}
-
-# A bare dotted version and nothing else. Everything this rejects -- an empty
-# parse, jq's "null" for a missing key, an error page, "npm ERR!" -- used to be
-# written into the pin or silently rewrite nothing at all.
-is_version() {
-  [[ $1 =~ ^[0-9]+(\.[0-9]+){1,3}([-+][0-9A-Za-z.-]+)?$ ]]
-}
-
-bump_version() {
-  local var="$1" cur="$2" new="$3"
-
-  awk -v var="${var}" -v cur="${cur}" -v ver="${new}" '
-    $0 ~ "^variable \"" var "\"" && $0 ~ "\"" cur "\"" {
-      sub("default *= *\"" cur "\"", "default = \"" ver "\"")
-    }
-    { print }
-  ' "${BAKE_FILE}" > "${BAKE_FILE}.tmp"
-  mv "${BAKE_FILE}.tmp" "${BAKE_FILE}"
-}
-
 main() {
   set -euo pipefail
   local check variable source project label latest current written
@@ -152,6 +119,4 @@ main() {
   done
 }
 
-# tests/check-updates.bats sources this file for the functions above; only a
-# direct run checks and bumps.
-[[ ${BASH_SOURCE[0]} != "$0" ]] || main "$@"
+main "$@"
