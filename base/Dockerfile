@@ -14,7 +14,7 @@
 # Pinned by digest so both platform builds start from the same Debian even when
 # the tag moves between them; Dependabot moves the digest when the tag does.
 # The apt upgrade below is what carries Debian's updates in between.
-FROM debian:13-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132 AS base
+FROM debian:13-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS base
 ARG PACKAGES
 
 ENV DEBIAN_FRONTEND=noninteractive
