@@ -93,11 +93,6 @@ jobs:
           labels: ${{ steps.update.outputs.labels }}
           branch: chore/bump-agent-versions
 
-      # Merges itself once the required checks pass, so an agent release reaches
-      # the published images without anyone having to click. The pre-merge build
-      # in pr.yml is what makes that safe: a version that does not install
-      # cannot satisfy the check and the pull request simply stays open.
-      #
       # Only on 'created', because the branch is reused night after night and
       # auto-merge is already armed on an 'updated' pull request.
       - name: enable auto-merge
