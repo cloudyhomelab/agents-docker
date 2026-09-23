@@ -31,12 +31,12 @@ ENTRYPOINT ["/usr/local/bin/agent-entrypoint"]
 FROM runtime AS claude
 ARG CLAUDE_VERSION
 
-# The installer is ${HOME}-relative and its launcher is an absolute symlink, so
-# a throwaway HOME relocates the whole install out of the agent's home volume.
-RUN HOME=/opt/claude bash -o pipefail -c 'curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "https://claude.ai/install.sh" | bash -s "${CLAUDE_VERSION}"' \
-    && ln -s /opt/claude/.local/bin/claude /usr/local/bin/claude \
-    && chmod -R a+rX /opt/claude \
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm install -g --prefix /usr/local @anthropic-ai/claude-code@"${CLAUDE_VERSION}" \
     && install -d -o agent -g agent /home/agent/.claude
+
+# The pin in docker-bake.hcl is the only way the version should change.
+ENV DISABLE_AUTOUPDATER=1
 
 USER 1000
 WORKDIR /home/agent
@@ -49,9 +49,6 @@ CMD ["claude"]
 FROM runtime AS codex
 ARG CODEX_VERSION
 
-# A cache mount rather than a post-install `npm cache clean`: either keeps the
-# cache out of the layer, but this one survives into the next build. Locked,
-# because the codex and gemini stages install in parallel and share it.
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
     npm install -g --prefix /usr/local @openai/codex@"${CODEX_VERSION}" \
     && install -d -o agent -g agent /home/agent/.codex
