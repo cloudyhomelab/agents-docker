@@ -13,80 +13,38 @@
 # shellcheck source=.github/scripts/check-updates-lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/check-updates-lib.sh"
 
-# One row per pinned version: the docker-bake.hcl variable, where to look up
-# the current release, and which project to look up. The label used in output
-# and in the bump log is the variable name lowercased without its _VERSION
-# suffix, so there is no second place to keep the agent's name.
+# One row per pinned version: the docker-bake.hcl variable and the npm package
+# whose latest dist-tag it follows. The label used in output and in the bump
+# log is the variable name lowercased without its _VERSION suffix, so there is
+# no second place to keep the agent's name.
 #
-#      <bake variable>  <source>        <project>
+#      <bake variable>  <package>
 CHECKS=(
-  "CLAUDE_VERSION      github-release   anthropics/claude-code"
-  "CODEX_VERSION       npm-dist-tag     @openai/codex"
-  "GEMINI_VERSION      npm-dist-tag     @google/gemini-cli"
+  "CLAUDE_VERSION      @anthropic-ai/claude-code"
+  "CODEX_VERSION       @openai/codex"
+  "GEMINI_VERSION      @google/gemini-cli"
 )
 
-# These are called as $(...), and a function body running inside a command
-# substitution does not honour errexit -- a failed fetch would otherwise fall
-# through to the parse and yield an empty version. Hence the explicit
-# `|| return` here and the checked call site below.
-github_release_version() {
-  local repo="$1"
-  local response="${SCRATCH}/${repo//\//_}.json"
-  local auth_config=""
-
-  # Authenticated whenever a token is around: the anonymous api.github.com
-  # limit is per IP and shared with every other Actions runner, so an
-  # unauthenticated check works most days and 403s the rest.
-  local token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
-  if [[ -n ${token} ]]; then
-    auth_config="header = \"Authorization: Bearer ${token}\""
-  else
-    echo "no GITHUB_TOKEN or GH_TOKEN; falling back to the anonymous rate limit" >&2
-  fi
-
-  # The token goes in via --config on stdin, not as a -H flag, to keep it out
-  # of the process list; an empty config is fine and simply sends no header.
-  # -S as well as -f, because -f alone reports a 403 as a bare exit code with
-  # no hint of which limit was hit.
-  curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 \
-      -H "Accept: application/vnd.github+json" \
-      -H "X-GitHub-Api-Version: 2022-11-28" \
-      --config - --output "${response}" \
-      "https://api.github.com/repos/${repo}/releases/latest" \
-      <<<"${auth_config}" || return 1
-
-  jq -r '.tag_name | ltrimstr("v")' "${response}"
-}
-
-npm_dist_tag_version() {
-  npm show "$1" version --json | jq -r .
-}
-
 latest_version() {
-  case "$1" in
-    github-release) github_release_version "$2" ;;
-    npm-dist-tag)   npm_dist_tag_version "$2" ;;
-    *)              echo "unknown source '$1'" >&2; return 1 ;;
-  esac
+  npm show "$1" version --json | jq -r .
 }
 
 main() {
   set -euo pipefail
-  local check variable source project label latest current written
+  local check variable package label latest current written
 
   [[ -f ${BAKE_FILE} ]] || fail "no ${BAKE_FILE} here; run this from the repository root"
 
-  SCRATCH=$(mktemp -d)
-  trap 'rm -rf "${SCRATCH}"' EXIT
-
   for check in "${CHECKS[@]}"; do
     # The columns are space-separated, so word splitting is the whole parse.
-    read -r variable source project <<<"${check}"
+    read -r variable package <<<"${check}"
 
     label="${variable%_VERSION}"
     label="${label,,}"
 
-    if ! latest=$(latest_version "${source}" "${project}"); then
+    # Called as $(...), where a failed fetch would not trip errexit and would
+    # fall through to the parse as an empty version; hence the checked call.
+    if ! latest=$(latest_version "${package}"); then
       fail "${label} - could not determine the latest version"
     fi
     is_version "${latest}" \
