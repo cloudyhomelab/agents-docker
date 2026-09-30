@@ -7,6 +7,9 @@
 # with the LTS as its baked-in default; this resolves the one this run wants,
 # in order of how explicit the request is: the environment wins, then whatever
 # the project itself declares, then the LTS default.
+#
+# It also turns GIT_USER_NAME and GIT_USER_EMAIL into git's user.name and
+# user.email for everything the agent runs.
 
 java_dir="/opt/java"
 
@@ -27,6 +30,21 @@ resolve_project_version() {
     printf '%s' "${version}"
 }
 
+# Passed as GIT_CONFIG_* pairs rather than written with git config: the system
+# file is root's, and /home/agent is often a volume that would keep one run's
+# identity for the next. Pairs set before this one are kept.
+add_git_config() {
+    local i="${GIT_CONFIG_COUNT:-0}"
+    export "GIT_CONFIG_KEY_${i}=$1" "GIT_CONFIG_VALUE_${i}=$2"
+    export GIT_CONFIG_COUNT=$((i + 1))
+}
+
+configure_git_identity() {
+    [[ -n ${GIT_USER_NAME:-} ]] && add_git_config user.name "${GIT_USER_NAME}"
+    [[ -n ${GIT_USER_EMAIL:-} ]] && add_git_config user.email "${GIT_USER_EMAIL}"
+    return 0
+}
+
 main() {
     set -euo pipefail
     local requested="${JAVA_VERSION:-}"
@@ -44,9 +62,10 @@ main() {
         export PATH="${JAVA_HOME}/bin:${PATH}"
     fi
 
+    configure_git_identity
     exec "$@"
 }
 
 # tests/agent-entrypoint.bats sources this file for the functions above; only a
-# direct run selects a JDK and execs.
+# direct run selects a JDK, sets the git identity and execs.
 [[ ${BASH_SOURCE[0]} != "$0" ]] || main "$@"

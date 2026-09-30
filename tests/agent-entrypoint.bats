@@ -4,7 +4,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # The JDK resolution order of scripts/agent-entrypoint: the environment, then
-# .sdkmanrc, then .java-version, then LTS, against a fake /opt/java.
+# .sdkmanrc, then .java-version, then LTS, against a fake /opt/java; and the
+# git identity it passes on from GIT_USER_NAME and GIT_USER_EMAIL.
 
 source "${BATS_TEST_DIRNAME}/../scripts/agent-entrypoint"
 
@@ -17,6 +18,9 @@ setup() {
   ln -s 25 "${java_dir}/lts"
   ln -s 26 "${java_dir}/latest"
   cd "${TMP}/project"
+  # Whatever the host has must not leak into the git identity tests.
+  unset GIT_USER_NAME GIT_USER_EMAIL GIT_CONFIG_COUNT
+  export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
 }
 
 teardown() {
@@ -94,4 +98,42 @@ selected() {
 @test "the command's own exit status is what comes back" {
   run main sh -c 'exit 7'
   [ "$status" -eq 7 ]
+}
+
+# What git itself resolves in the command main execs; an unset key prints "-".
+git_identity() {
+  main sh -c 'printf "%s\n%s\n%s\n" \
+    "$(git config user.name || echo -)" \
+    "$(git config user.email || echo -)" \
+    "$(git config core.editor || echo -)"'
+}
+
+@test "GIT_USER_NAME and GIT_USER_EMAIL become git's user.name and user.email" {
+  export GIT_USER_NAME="Ada Lovelace" GIT_USER_EMAIL="ada@example.com"
+  run git_identity
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "Ada Lovelace" ]
+  [ "${lines[1]}" = "ada@example.com" ]
+}
+
+@test "with neither set no git config is passed on" {
+  run main sh -c 'echo "${GIT_CONFIG_COUNT:-unset}"'
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "unset" ]
+}
+
+@test "each variable is applied on its own" {
+  export GIT_USER_EMAIL="ada@example.com"
+  run git_identity
+  [ "${lines[0]}" = "-" ]
+  [ "${lines[1]}" = "ada@example.com" ]
+}
+
+@test "GIT_CONFIG pairs already in the environment are kept" {
+  export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.editor GIT_CONFIG_VALUE_0=vi
+  export GIT_USER_NAME="Ada Lovelace" GIT_USER_EMAIL="ada@example.com"
+  run git_identity
+  [ "${lines[0]}" = "Ada Lovelace" ]
+  [ "${lines[1]}" = "ada@example.com" ]
+  [ "${lines[2]}" = "vi" ]
 }
