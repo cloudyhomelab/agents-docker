@@ -12,6 +12,8 @@
 # what runs by default. JAVA_VERSION is forwarded only when set, leaving a
 # project's own .sdkmanrc or .java-version in charge otherwise;
 # <AGENT>_IMAGE_TAG pins a published version tag instead of latest.
+# The git identity is read from git config in the workspace, so a per-repo or
+# includeIf identity applies.
 #
 #     claude .
 #     JAVA_VERSION=17 claude . --resume
@@ -87,6 +89,15 @@ _agent_run() {
         maven=(-v "$HOME/.m2:/home/agent/.m2")
     fi
 
+    # Passed only when there is one, so an unset identity stays unset in the
+    # container rather than becoming an empty one.
+    local git_name git_email
+    local -a identity
+    git_name="$(git -C "$workspace_abs" config user.name 2>/dev/null)"
+    git_email="$(git -C "$workspace_abs" config user.email 2>/dev/null)"
+    [[ -n "$git_name" ]] && identity+=(-e "GIT_USER_NAME=${git_name}")
+    [[ -n "$git_email" ]] && identity+=(-e "GIT_USER_EMAIL=${git_email}")
+
     cmd=(
         docker run
         --rm
@@ -103,6 +114,7 @@ _agent_run() {
         -v "${tool}_cache:/home/agent/.cache"
         -w /workspace
         -e JAVA_VERSION
+        "${identity[@]}"
         --name "$name"
         "docker.io/binarycodes/${tool}:${tag}"
         "$@" # forward extra args

@@ -43,6 +43,19 @@ java=17
 17
 ```
 
+### Setting the git identity
+
+`GIT_USER_NAME` and `GIT_USER_EMAIL` become git's `user.name` and `user.email`
+for everything the agent runs. Nothing is written to a config file, so the
+identity lasts only for that run. The shell helper below passes the one git
+config gives for the project, so this is only needed with a bare `docker run`:
+
+```bash
+docker run --rm -it \
+  -e GIT_USER_NAME="Ada Lovelace" -e GIT_USER_EMAIL="ada@example.com" \
+  docker.io/binarycodes/claude:latest
+```
+
 ## Quick Start
 
 Run the CLI directly, substituting `codex` or `gemini` for `claude`:
@@ -70,6 +83,12 @@ agent() {
   local tool="$1"
   local project_path="$2"
   shift 2
+  local git_name git_email
+  local -a identity
+  git_name="$(git -C "$project_path" config user.name 2>/dev/null)"
+  git_email="$(git -C "$project_path" config user.email 2>/dev/null)"
+  [[ -n "$git_name" ]] && identity+=(-e "GIT_USER_NAME=${git_name}")
+  [[ -n "$git_email" ]] && identity+=(-e "GIT_USER_EMAIL=${git_email}")
   docker run --pull always --rm -it \
     --cap-drop ALL --security-opt no-new-privileges \
     --pids-limit 4096 --memory 8g \
@@ -77,6 +96,7 @@ agent() {
     -v "${project_path}:/workspace" \
     -w /workspace \
     -e JAVA_VERSION \
+    "${identity[@]}" \
     "docker.io/binarycodes/${tool}:latest" "$@"
 }
 ```
@@ -88,6 +108,8 @@ JAVA_VERSION=17 agent codex /path/to/workspace
 
 `-e JAVA_VERSION` with no value forwards the variable only when it is set in
 your shell, so a project's own `.sdkmanrc` still decides when you do not.
+The git identity is the one git config gives for the project, so a per-repo or
+`includeIf` identity applies.
 
 The `${tool}_home` volume persists agent configuration and credentials between
 runs. Toolchains and the agent CLIs live outside `/home/agent`, so they always
