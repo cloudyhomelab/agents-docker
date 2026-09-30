@@ -75,57 +75,44 @@ docker run --rm -it \
 
 ### Shell helper function
 
-Add to `~/.bashrc` or `~/.zshrc`:
+[`shell-helper/agents.sh`](shell-helper/agents.sh) defines `claude`, `codex`
+and `gemini` wrappers. Source it from `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-agent() {
-  [[ $# -lt 2 ]] && { echo "usage: agent <tool> <project_path> [agent args...]"; return 1; }
-  local tool="$1"
-  local project_path="$2"
-  shift 2
-  local git_name git_email
-  local -a identity
-  git_name="$(git -C "$project_path" config user.name 2>/dev/null)"
-  git_email="$(git -C "$project_path" config user.email 2>/dev/null)"
-  [[ -n "$git_name" ]] && identity+=(-e "GIT_USER_NAME=${git_name}")
-  [[ -n "$git_email" ]] && identity+=(-e "GIT_USER_EMAIL=${git_email}")
-  docker run --pull always --rm -it \
-    --cap-drop ALL --security-opt no-new-privileges \
-    --pids-limit 4096 --memory 8g \
-    -v "${tool}_home:/home/agent" \
-    -v "${project_path}:/workspace" \
-    -w /workspace \
-    -e JAVA_VERSION \
-    "${identity[@]}" \
-    "docker.io/binarycodes/${tool}:latest" "$@"
-}
+source /path/to/shell-helper/agents.sh
 ```
+
+The first argument is always the workspace, and the rest go to the CLI:
 
 ```bash
-agent codex /path/to/workspace
-JAVA_VERSION=17 agent codex /path/to/workspace
+claude .
+codex /path/to/workspace --version
+JAVA_VERSION=17 claude . --resume
+CODEX_IMAGE_TAG=0.152.0 codex .
+AGENT_MEMORY=16g gemini .
+AGENT_RUNTIME=docker claude .
 ```
 
-`-e JAVA_VERSION` with no value forwards the variable only when it is set in
-your shell, so a project's own `.sdkmanrc` still decides when you do not.
-The git identity is the one git config gives for the project, so a per-repo or
-`includeIf` identity applies.
+It uses podman when installed and docker otherwise; `AGENT_RUNTIME` picks one.
+Under podman the host user is mapped to the container's `agent` user, so files
+written to the workspace stay yours. `<AGENT>_IMAGE_TAG` pins a published
+version.
 
-The `${tool}_home` volume persists agent configuration and credentials between
-runs. Toolchains and the agent CLIs live outside `/home/agent`, so they always
+`JAVA_VERSION` is forwarded only when it is set in your shell, so a project's
+own `.sdkmanrc` still decides when you do not. The git identity is the one git
+config gives for the project, so a per-repo or `includeIf` identity applies.
+
+Each CLI gets its own config volume for settings and credentials, plus separate
+volumes for its Go and cache directories; the host `~/.m2` is shared when it
+exists. Toolchains and the agent CLIs live outside those volumes, so they always
 come from the image and are refreshed by `--pull always`.
 
 The agent inside runs whatever the workspace and the model decide, so the
 container gets no capabilities and no privilege gain, and a pid and memory cap
-sized for a Maven build; raise them if yours needs more. Network egress is not
-restricted, since which APIs and registries to allow is your call: attach the
-container to a user-defined network (`docker network create`, then `--network`)
-and filter it with the host firewall.
-
-[`shell-helper/agents.sh`](shell-helper/agents.sh) has fuller `claude`, `codex`
-and `gemini` wrappers to source from the same rc file: a config volume per CLI,
-separate volumes per cache, the host Maven repository shared when it exists, and
-`<AGENT>_IMAGE_TAG` to pin a published version.
+sized for a Maven build; raise the memory with `AGENT_MEMORY` if yours needs
+more. Network egress is not restricted, since which APIs and registries to allow
+is your call: attach the container to a user-defined network (`docker network
+create`, then `--network`) and filter it with the host firewall.
 
 ## Verifying the Images
 
