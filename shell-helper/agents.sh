@@ -9,6 +9,7 @@
 #     JAVA_VERSION=17 claude . --resume
 #     CODEX_IMAGE_TAG=0.152.0 codex ~/some/project
 #     AGENT_MEMORY=16g gemini .
+#     AGENT_RUNTIME=docker claude .
 
 function _agent_run() {
     local tool="$1"
@@ -21,8 +22,20 @@ function _agent_run() {
     fi
     shift 3
 
+    local runtime="${AGENT_RUNTIME:-}"
+    if [[ -z "$runtime" ]]; then
+        if command -v podman >/dev/null 2>&1; then
+            runtime=podman
+        elif command -v docker >/dev/null 2>&1; then
+            runtime=docker
+        else
+            printf '%s: neither podman nor docker found\n' "$tool" >&2
+            return 1
+        fi
+    fi
+
     local workspace_abs name tmp_path
-    local -a config cmd
+    local -a config cmd userns
 
     workspace_abs="$(cd "$workspace" && pwd -P)" || return 1
     # $RANDOM: two instances can start in the same second
@@ -64,11 +77,18 @@ function _agent_run() {
     [[ -n "$git_name" ]] && identity+=(-e "GIT_USER_NAME=${git_name}")
     [[ -n "$git_email" ]] && identity+=(-e "GIT_USER_EMAIL=${git_email}")
 
+    # rootless podman maps the host user to container root, so map it to agent;
+    # --version also catches podman behind a docker shim
+    if "$runtime" --version 2>/dev/null | grep -qi podman; then
+        userns=(--userns "keep-id:uid=1000,gid=1000")
+    fi
+
     cmd=(
-        docker run
+        "$runtime" run
         --rm
         -it
         --pull always
+        "${userns[@]}"
         --cap-drop ALL
         --security-opt no-new-privileges
         --pids-limit 4096
