@@ -3,42 +3,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # shellcheck shell=bash
 
-# Wrappers that run the containerised agent CLIs against a project directory.
+# Containerised agent CLIs. Source from ~/.bashrc or ~/.zshrc. The first
+# argument is always the workspace: `claude . --version`, not `claude --version`.
 #
-# Source this from ~/.bashrc or ~/.zshrc:
-#     source /path/to/shell-helper/agents.sh
-#
-# Each function shadows a CLI of the same name on PATH, so the container is
-# what runs by default. JAVA_VERSION is forwarded only when set, leaving a
-# project's own .sdkmanrc or .java-version in charge otherwise;
-# <AGENT>_IMAGE_TAG pins a published version tag instead of latest.
-# The git identity is read from git config in the workspace, so a per-repo or
-# includeIf identity applies.
-#
-#     claude .
 #     JAVA_VERSION=17 claude . --resume
 #     CODEX_IMAGE_TAG=0.152.0 codex ~/some/project
-#
-# The container runs with every capability dropped, no-new-privileges and a
-# pid and memory cap: the agent inside executes whatever the workspace and the
-# model between them decide, and that should stay the container's problem.
-# AGENT_MEMORY raises the memory cap for a build that needs more.
-#
-#     AGENT_MEMORY=16g claude .
-#
-# The first argument is always the workspace, so there is no bare form:
-# `claude --version` fails the directory check; write `claude . --version`.
-#
-# Nothing is created on the host outside /tmp. Configuration, caches and Go
-# modules live in named volumes; the host ~/.m2 is shared only when it already
-# exists. The one file the helper creates is an empty placeholder for the
-# claude CLI's ~/.claude.json, under /tmp/agent-helper-<uid>/, because a bind
-# mount whose source is missing becomes a directory. Being in /tmp it does not
-# survive a reboot or /tmp cleanup, and the state the CLI keeps in that file
-# goes with it.
+#     AGENT_MEMORY=16g gemini .
+#     AGENT_RUNTIME=docker claude .
 
-# Shared plumbing: _agent_run <tool> <tag> <workspace> [cli args...]
-_agent_run() {
+function _agent_run() {
     local tool="$1"
     local tag="$2"
     local workspace="$3"
@@ -49,25 +22,33 @@ _agent_run() {
     fi
     shift 3
 
+    local runtime="${AGENT_RUNTIME:-}"
+    if [[ -z "$runtime" ]]; then
+        if command -v podman >/dev/null 2>&1; then
+            runtime=podman
+        elif command -v docker >/dev/null 2>&1; then
+            runtime=docker
+        else
+            printf '%s: neither podman nor docker found\n' "$tool" >&2
+            return 1
+        fi
+    fi
+
     local workspace_abs name tmp_path
-    local -a config cmd
+    local -a config cmd userns
 
     workspace_abs="$(cd "$workspace" && pwd -P)" || return 1
-    # docker accepts a limited character set for --name
-    # $RANDOM as well as the timestamp: two instances can start in the same
-    # second, and $$ alone repeats when both are launched from one shell
+    # $RANDOM: two instances can start in the same second
     name="${tool}-$(basename "$workspace_abs")-$(date +%s)-${RANDOM}"
     name="${name//[^a-zA-Z0-9_.-]/-}"
 
-    # Credentials and settings differ per CLI, so each gets its own volume.
     case "$tool" in
         claude)
-            # .claude.json is bind mounted as a file to keep it editable from
-            # the host, unlike the rest of the config.
+            # a bind mount whose source is missing becomes a directory
             tmp_path="/tmp/agent-helper-${UID}"
             if [[ ! -f "${tmp_path}/claude.json" ]]; then
                 mkdir -p "${tmp_path}"
-                touch "${tmp_path}/claude.json"
+                printf '{}\n' > "${tmp_path}/claude.json"
             fi
             config=(
                 -v claude_config:/home/agent/.claude
@@ -82,15 +63,13 @@ _agent_run() {
             ;;
     esac
 
-    # Only an existing ~/.m2 is shared: a missing bind source would be created
-    # root-owned by the daemon.
+    # a missing bind source would be created root-owned
     local -a maven
     if [[ -d "$HOME/.m2" ]]; then
         maven=(-v "$HOME/.m2:/home/agent/.m2")
     fi
 
-    # Passed only when there is one, so an unset identity stays unset in the
-    # container rather than becoming an empty one.
+    # an unset identity stays unset rather than empty
     local git_name git_email
     local -a identity
     git_name="$(git -C "$workspace_abs" config user.name 2>/dev/null)"
@@ -98,11 +77,18 @@ _agent_run() {
     [[ -n "$git_name" ]] && identity+=(-e "GIT_USER_NAME=${git_name}")
     [[ -n "$git_email" ]] && identity+=(-e "GIT_USER_EMAIL=${git_email}")
 
+    # rootless podman maps the host user to container root, so map it to agent;
+    # --version also catches podman behind a docker shim
+    if "$runtime" --version 2>/dev/null | grep -qi podman; then
+        userns=(--userns "keep-id:uid=1000,gid=1000")
+    fi
+
     cmd=(
-        docker run
+        "$runtime" run
         --rm
         -it
         --pull always
+        "${userns[@]}"
         --cap-drop ALL
         --security-opt no-new-privileges
         --pids-limit 4096
@@ -117,20 +103,20 @@ _agent_run() {
         "${identity[@]}"
         --name "$name"
         "docker.io/binarycodes/${tool}:${tag}"
-        "$@" # forward extra args
+        "$@"
     )
 
     "${cmd[@]}"
 }
 
-claude() {
+function claude() {
     _agent_run claude "${CLAUDE_IMAGE_TAG:-latest}" "$@"
 }
 
-codex() {
+function codex() {
     _agent_run codex "${CODEX_IMAGE_TAG:-latest}" "$@"
 }
 
-gemini() {
+function gemini() {
     _agent_run gemini "${GEMINI_IMAGE_TAG:-latest}" "$@"
 }
