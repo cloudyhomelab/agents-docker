@@ -10,6 +10,7 @@
 #     CODEX_IMAGE_TAG=0.152.0 codex ~/some/project
 #     AGENT_MEMORY=16g gemini .
 #     AGENT_RUNTIME=docker claude .
+#     AGENT_CONFIG_REPO=https://github.com/you/agent-config.git claude .
 
 function _agent_run() {
     local tool="$1"
@@ -53,6 +54,7 @@ function _agent_run() {
             config=(
                 -v claude_config:/home/agent/.claude
                 -v "${tmp_path}/claude.json:/home/agent/.claude.json"
+                -e AGENT_CONFIG_REPO
             )
             ;;
         codex)
