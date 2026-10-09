@@ -61,7 +61,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN groupadd -g 1000 agent \
     && useradd -m -u 1000 -g 1000 -s /bin/bash agent \
     && install -d -o agent -g agent /home/agent/.cache \
-    && git config --system --add safe.directory /workspace
+    && git config --system --add safe.directory '/workspace/*'
 
 # Not in the Debian archive, so the static release binary is fetched instead.
 # The release names its assets x86_64 and arm64 where TARGETARCH says amd64 and

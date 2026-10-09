@@ -68,8 +68,8 @@ With your current project mounted:
 
 ```bash
 docker run --rm -it \
-  -v "$PWD:/workspace" \
-  -w /workspace \
+  -v "$PWD:/workspace/${PWD##*/}" \
+  -w "/workspace/${PWD##*/}" \
   docker.io/binarycodes/claude:latest
 ```
 
@@ -98,6 +98,10 @@ It uses podman when installed and docker otherwise; `AGENT_RUNTIME` picks one.
 Under podman the host user is mapped to the container's `agent` user, so files
 written to the workspace stay yours. `<AGENT>_IMAGE_TAG` pins a published
 version.
+
+The workspace is mounted at `/workspace/<folder name>`, since the CLIs keep
+memory, sessions and trust per working directory. Two folders with the same
+name share that state.
 
 `JAVA_VERSION` is forwarded only when it is set in your shell, so a project's
 own `.sdkmanrc` still decides when you do not. The git identity is the one git
