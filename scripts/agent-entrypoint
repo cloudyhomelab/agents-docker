@@ -10,8 +10,12 @@
 #
 # It also turns GIT_USER_NAME and GIT_USER_EMAIL into git's user.name and
 # user.email for everything the agent runs.
+#
+# In the claude image it also links the CLAUDE.md and skills of the
+# AGENT_CONFIG_REPO git repo, when that is set, into ~/.claude.
 
 java_dir="/opt/java"
+claude_dir="/home/agent/.claude"
 
 # Each file is parsed rather than merely probed for: a .sdkmanrc that sets only
 # other candidates must not shadow a .java-version sitting beside it.
@@ -45,6 +49,53 @@ configure_git_identity() {
     return 0
 }
 
+warn() {
+    echo "agent-entrypoint: $*" >&2
+}
+
+# Never replaces a real file: that one is the user's, put there by hand.
+link_into_claude_dir() {
+    local source="$1" target="$2"
+    if [[ -e ${target} && ! -L ${target} ]]; then
+        warn "${target} is not a link, leaving it in place of ${source}"
+        return 0
+    fi
+    ln -sfn "${source}" "${target}"
+}
+
+# Links, not copies, so a skill deleted upstream leaves a dangling link to
+# sweep. Linked one by one because claude.ai's synced skills share the
+# directory. An unreachable remote keeps the last copy rather than blocking the
+# session.
+sync_agent_config() {
+    [[ -n ${AGENT_CONFIG_REPO:-} && -d ${claude_dir} ]] || return 0
+    local repo="${claude_dir}/agent-config"
+    local skill link
+
+    if [[ -d ${repo}/.git ]]; then
+        GIT_TERMINAL_PROMPT=0 git -C "${repo}" pull --ff-only --quiet \
+            || warn "could not update ${repo}, using the copy already there"
+    elif ! GIT_TERMINAL_PROMPT=0 git clone --depth 1 --quiet "${AGENT_CONFIG_REPO}" "${repo}"; then
+        warn "could not clone ${AGENT_CONFIG_REPO}"
+        return 0
+    fi
+
+    [[ -f ${repo}/CLAUDE.md ]] && link_into_claude_dir "${repo}/CLAUDE.md" "${claude_dir}/CLAUDE.md"
+    mkdir -p "${claude_dir}/skills"
+    for skill in "${repo}"/skills/*/; do
+        [[ -f ${skill}SKILL.md ]] || continue
+        skill="${skill%/}"
+        link_into_claude_dir "${skill}" "${claude_dir}/skills/${skill##*/}"
+    done
+
+    for link in "${claude_dir}/CLAUDE.md" "${claude_dir}"/skills/*; do
+        if [[ -L ${link} && ! -e ${link} && $(readlink "${link}") == "${repo}/"* ]]; then
+            rm "${link}"
+        fi
+    done
+    return 0
+}
+
 main() {
     set -euo pipefail
     local requested="${JAVA_VERSION:-}"
@@ -57,15 +108,17 @@ main() {
     else
         # Keep going with the default rather than failing: most sessions in a
         # mistagged container are not Java work and should not be blocked by it.
-        echo "agent-entrypoint: no JDK '${requested}' in this image; available: $(cd "${java_dir}" && echo *)" >&2
+        warn "no JDK '${requested}' in this image; available: $(cd "${java_dir}" && echo *)"
         export JAVA_HOME="${java_dir}/lts"
         export PATH="${JAVA_HOME}/bin:${PATH}"
     fi
 
     configure_git_identity
+    sync_agent_config
     exec "$@"
 }
 
 # tests/agent-entrypoint.bats sources this file for the functions above; only a
-# direct run selects a JDK, sets the git identity and execs.
+# direct run selects a JDK, sets the git identity, syncs the agent config and
+# execs.
 [[ ${BASH_SOURCE[0]} != "$0" ]] || main "$@"

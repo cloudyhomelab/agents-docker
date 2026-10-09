@@ -5,7 +5,8 @@
 #
 # The JDK resolution order of scripts/agent-entrypoint: the environment, then
 # .sdkmanrc, then .java-version, then LTS, against a fake /opt/java; and the
-# git identity it passes on from GIT_USER_NAME and GIT_USER_EMAIL.
+# git identity it passes on from GIT_USER_NAME and GIT_USER_EMAIL; and the
+# AGENT_CONFIG_REPO links, against a local repo standing in for the remote.
 
 source "${BATS_TEST_DIRNAME}/../scripts/agent-entrypoint"
 
@@ -17,9 +18,10 @@ setup() {
   mkdir -p "${java_dir}"/{8,11,17,21,25,26} "${TMP}/project"
   ln -s 25 "${java_dir}/lts"
   ln -s 26 "${java_dir}/latest"
+  claude_dir="${TMP}/claude"
   cd "${TMP}/project"
   # Whatever the host has must not leak into the git identity tests.
-  unset GIT_USER_NAME GIT_USER_EMAIL GIT_CONFIG_COUNT
+  unset GIT_USER_NAME GIT_USER_EMAIL GIT_CONFIG_COUNT AGENT_CONFIG_REPO
   export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
 }
 
@@ -136,4 +138,81 @@ git_identity() {
   [ "${lines[0]}" = "Ada Lovelace" ]
   [ "${lines[1]}" = "ada@example.com" ]
   [ "${lines[2]}" = "vi" ]
+}
+
+# A remote with CLAUDE.md and one skill, plus an empty ~/.claude.
+make_config_remote() {
+  mkdir -p "${claude_dir}" "${TMP}/remote/skills/alpha"
+  echo "rules" > "${TMP}/remote/CLAUDE.md"
+  echo "alpha" > "${TMP}/remote/skills/alpha/SKILL.md"
+  commit_remote
+  export AGENT_CONFIG_REPO="${TMP}/remote"
+}
+
+commit_remote() {
+  git -C "${TMP}/remote" init --quiet
+  git -C "${TMP}/remote" add --all
+  git -C "${TMP}/remote" -c user.name=t -c user.email=t@t commit --quiet -m change
+}
+
+@test "AGENT_CONFIG_REPO links CLAUDE.md and each skill into ~/.claude" {
+  make_config_remote
+  run main true
+  [ "$status" -eq 0 ]
+  [ "$(cat "${claude_dir}/CLAUDE.md")" = "rules" ]
+  [ -L "${claude_dir}/skills/alpha" ]
+  [ "$(cat "${claude_dir}/skills/alpha/SKILL.md")" = "alpha" ]
+}
+
+@test "a second run pulls, links new skills and drops removed ones" {
+  make_config_remote
+  (main true)
+  mkdir "${TMP}/remote/skills/beta"
+  echo "beta" > "${TMP}/remote/skills/beta/SKILL.md"
+  git -C "${TMP}/remote" rm --quiet -r skills/alpha
+  commit_remote
+  run main true
+  [ "$status" -eq 0 ]
+  [ ! -e "${claude_dir}/skills/alpha" ] && [ ! -L "${claude_dir}/skills/alpha" ]
+  [ "$(cat "${claude_dir}/skills/beta/SKILL.md")" = "beta" ]
+}
+
+@test "skills and files the repo does not own are left alone" {
+  make_config_remote
+  mkdir -p "${claude_dir}/skills/synced"
+  echo "mine" > "${claude_dir}/CLAUDE.md"
+  ln -s "${TMP}/nowhere" "${claude_dir}/skills/other"
+  run main true
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CLAUDE.md is not a link"* ]]
+  [ "$(cat "${claude_dir}/CLAUDE.md")" = "mine" ]
+  [ -d "${claude_dir}/skills/synced" ]
+  [ -L "${claude_dir}/skills/other" ]
+}
+
+@test "an unreachable repo warns and the command still runs" {
+  mkdir -p "${claude_dir}"
+  export AGENT_CONFIG_REPO="${TMP}/missing"
+  run main sh -c 'echo ran'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"agent-entrypoint: could not clone ${TMP}/missing"* ]]
+  [ "${lines[-1]}" = "ran" ]
+}
+
+@test "an unreachable repo after the first clone keeps the last copy" {
+  make_config_remote
+  (main true)
+  mv "${TMP}/remote" "${TMP}/gone"
+  run main true
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"could not update"* ]]
+  [ "$(cat "${claude_dir}/skills/alpha/SKILL.md")" = "alpha" ]
+}
+
+@test "without ~/.claude, as in the codex and gemini images, nothing is cloned" {
+  make_config_remote
+  rm -rf "${claude_dir}"
+  run main true
+  [ "$status" -eq 0 ]
+  [ ! -e "${claude_dir}" ]
 }

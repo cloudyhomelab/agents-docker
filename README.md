@@ -91,6 +91,7 @@ JAVA_VERSION=17 claude . --resume
 CODEX_IMAGE_TAG=0.152.0 codex .
 AGENT_MEMORY=16g gemini .
 AGENT_RUNTIME=docker claude .
+AGENT_CONFIG_REPO=https://github.com/you/agent-config.git claude .
 ```
 
 It uses podman when installed and docker otherwise; `AGENT_RUNTIME` picks one.
@@ -101,6 +102,15 @@ version.
 `JAVA_VERSION` is forwarded only when it is set in your shell, so a project's
 own `.sdkmanrc` still decides when you do not. The git identity is the one git
 config gives for the project, so a per-repo or `includeIf` identity applies.
+
+`AGENT_CONFIG_REPO`, exported in your shell rc, carries your own Claude
+instructions and skills to every machine. It names a git repository with a
+`CLAUDE.md` and `skills/<name>/SKILL.md` folders, cloned without credentials,
+so use a public HTTPS URL. On each start the claude image clones or
+fast-forwards it into `~/.claude/agent-config` and links `CLAUDE.md` and each
+skill into `~/.claude`. A skill deleted from the repo loses its link; a file
+that is not a link is never replaced. When the repository cannot be reached,
+the last copy is used.
 
 Each CLI gets its own config volume for settings and credentials, plus separate
 volumes for its Go and cache directories; the host `~/.m2` is shared when it
