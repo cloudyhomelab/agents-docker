@@ -13,8 +13,8 @@ variable "REVISION" { default = "" }
 # The base the agents are built on: the tag for the reader, the digest for the
 # build. check-base-updates.sh moves both to the newest tag the base publish
 # has landed; the publish workflow passes them on as the OCI base labels.
-variable "BASE_TAG" { default = "2026.10.05.0943" }
-variable "BASE_DIGEST" { default = "sha256:1c13f06386d0562e5ccfde2ecffbbb9147ec76f902eb4fbbce8a2acaf6c048ad" }
+variable "BASE_TAG" { default = "2026.10.09.1354" }
+variable "BASE_DIGEST" { default = "sha256:aac19dc6b3efce1ffbabaefa8882ac05099fa7fec41e994864e544839ac105cd" }
 
 variable "CLAUDE_VERSION" { default = "2.1.295" }
 variable "CODEX_VERSION" { default = "0.162.0" }
