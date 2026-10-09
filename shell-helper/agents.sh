@@ -35,25 +35,22 @@ function _agent_run() {
         fi
     fi
 
-    local workspace_abs name tmp_path
+    local workspace_abs mount_path name
     local -a config cmd userns
 
     workspace_abs="$(cd "$workspace" && pwd -P)" || return 1
+    # The CLIs key per-project state (memory, sessions, trust) by working
+    # directory, so each repo needs its own path; the basename keeps the host
+    # path out of the container.
+    mount_path="/workspace/$(basename "$workspace_abs")"
     # $RANDOM: two instances can start in the same second
     name="${tool}-$(basename "$workspace_abs")-$(date +%s)-${RANDOM}"
     name="${name//[^a-zA-Z0-9_.-]/-}"
 
     case "$tool" in
         claude)
-            # a bind mount whose source is missing becomes a directory
-            tmp_path="/tmp/agent-helper-${UID}"
-            if [[ ! -f "${tmp_path}/claude.json" ]]; then
-                mkdir -p "${tmp_path}"
-                printf '{}\n' > "${tmp_path}/claude.json"
-            fi
             config=(
                 -v claude_config:/home/agent/.claude
-                -v "${tmp_path}/claude.json:/home/agent/.claude.json"
                 -e AGENT_CONFIG_REPO
             )
             ;;
@@ -96,11 +93,11 @@ function _agent_run() {
         --pids-limit 4096
         --memory "${AGENT_MEMORY:-8g}"
         "${config[@]}"
-        -v "${workspace_abs}:/workspace"
+        -v "${workspace_abs}:${mount_path}"
         "${maven[@]}"
         -v "${tool}_go:/home/agent/go"
         -v "${tool}_cache:/home/agent/.cache"
-        -w /workspace
+        -w "$mount_path"
         -e JAVA_VERSION
         "${identity[@]}"
         --name "$name"

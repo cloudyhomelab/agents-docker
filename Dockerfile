@@ -37,6 +37,8 @@ RUN --mount=type=cache,target=/root/.npm,sharing=locked \
 
 # The pin in docker-bake.hcl is the only way the version should change.
 ENV DISABLE_AUTOUPDATER=1
+# Moves .claude.json, which holds theme, onboarding and folder trust, into the config volume
+ENV CLAUDE_CONFIG_DIR=/home/agent/.claude
 
 USER 1000
 WORKDIR /home/agent
