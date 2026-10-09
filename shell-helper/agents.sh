@@ -35,7 +35,7 @@ function _agent_run() {
         fi
     fi
 
-    local workspace_abs mount_path name tmp_path
+    local workspace_abs mount_path name
     local -a config cmd userns
 
     workspace_abs="$(cd "$workspace" && pwd -P)" || return 1
@@ -49,15 +49,8 @@ function _agent_run() {
 
     case "$tool" in
         claude)
-            # a bind mount whose source is missing becomes a directory
-            tmp_path="/tmp/agent-helper-${UID}"
-            if [[ ! -f "${tmp_path}/claude.json" ]]; then
-                mkdir -p "${tmp_path}"
-                printf '{}\n' > "${tmp_path}/claude.json"
-            fi
             config=(
                 -v claude_config:/home/agent/.claude
-                -v "${tmp_path}/claude.json:/home/agent/.claude.json"
                 -e AGENT_CONFIG_REPO
             )
             ;;
