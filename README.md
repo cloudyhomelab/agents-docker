@@ -112,7 +112,9 @@ instructions and skills to every machine. It names a git repository with a
 `CLAUDE.md` and `skills/<name>/SKILL.md` folders, cloned without credentials,
 so use a public HTTPS URL. On each start the claude image clones or
 fast-forwards it into `~/.claude/agent-config` and links `CLAUDE.md` and each
-skill into `~/.claude`. A skill deleted from the repo loses its link; a file
+skill into `~/.claude`. An optional `statusline.sh` at the repo root is linked
+too and set as the status line in `~/.claude/settings.json`, unless that
+already names one. A skill deleted from the repo loses its link; a file
 that is not a link is never replaced. When the repository cannot be reached,
 the last copy is used.
 

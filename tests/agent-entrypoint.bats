@@ -190,6 +190,57 @@ commit_remote() {
   [ -L "${claude_dir}/skills/other" ]
 }
 
+@test "statusline.sh is linked and enabled in an existing settings.json" {
+  make_config_remote
+  echo "echo line" > "${TMP}/remote/statusline.sh"
+  commit_remote
+  echo '{"theme": "dark"}' > "${claude_dir}/settings.json"
+  run main true
+  [ "$status" -eq 0 ]
+  [ "$(cat "${claude_dir}/statusline.sh")" = "echo line" ]
+  [ "$(jq -r .theme "${claude_dir}/settings.json")" = "dark" ]
+  [ "$(jq -r .statusLine.command "${claude_dir}/settings.json")" = "${claude_dir}/statusline.sh" ]
+}
+
+@test "a statusLine already in settings.json is kept" {
+  make_config_remote
+  echo "echo line" > "${TMP}/remote/statusline.sh"
+  commit_remote
+  echo '{"statusLine": {"type": "command", "command": "mine"}}' > "${claude_dir}/settings.json"
+  run main true
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .statusLine.command "${claude_dir}/settings.json")" = "mine" ]
+}
+
+@test "without settings.json one is created with only the statusLine" {
+  make_config_remote
+  echo "echo line" > "${TMP}/remote/statusline.sh"
+  commit_remote
+  run main true
+  [ "$status" -eq 0 ]
+  [ "$(jq -c 'keys' "${claude_dir}/settings.json")" = '["statusLine"]' ]
+}
+
+@test "an unparsable settings.json warns and is left as it was" {
+  make_config_remote
+  echo "echo line" > "${TMP}/remote/statusline.sh"
+  commit_remote
+  echo "{broken" > "${claude_dir}/settings.json"
+  run main true
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"could not add statusLine"* ]]
+  [ "$(cat "${claude_dir}/settings.json")" = "{broken" ]
+  [ ! -e "${claude_dir}/settings.json.new" ]
+}
+
+@test "a repo without statusline.sh leaves settings.json alone" {
+  make_config_remote
+  run main true
+  [ "$status" -eq 0 ]
+  [ ! -e "${claude_dir}/settings.json" ]
+  [ ! -e "${claude_dir}/statusline.sh" ]
+}
+
 @test "an unreachable repo warns and the command still runs" {
   mkdir -p "${claude_dir}"
   export AGENT_CONFIG_REPO="${TMP}/missing"

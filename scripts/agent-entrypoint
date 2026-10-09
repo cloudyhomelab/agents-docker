@@ -11,8 +11,8 @@
 # It also turns GIT_USER_NAME and GIT_USER_EMAIL into git's user.name and
 # user.email for everything the agent runs.
 #
-# In the claude image it also links the CLAUDE.md and skills of the
-# AGENT_CONFIG_REPO git repo, when that is set, into ~/.claude.
+# In the claude image it also links the CLAUDE.md, statusline.sh and skills of
+# the AGENT_CONFIG_REPO git repo, when that is set, into ~/.claude.
 
 java_dir="/opt/java"
 claude_dir="/home/agent/.claude"
@@ -63,6 +63,23 @@ link_into_claude_dir() {
     ln -sfn "${source}" "${target}"
 }
 
+# Only fills in a missing statusLine: settings.json also holds per-machine
+# choices (model, theme, permissions), so the repo cannot own the whole file.
+enable_status_line() {
+    local settings="${claude_dir}/settings.json"
+
+    [[ -f ${settings} ]] || echo '{}' > "${settings}"
+    jq -e 'has("statusLine")' "${settings}" > /dev/null 2>&1 && return 0
+    if jq --arg command "${claude_dir}/statusline.sh" \
+        '.statusLine = {type: "command", command: $command}' \
+        "${settings}" > "${settings}.new" 2> /dev/null; then
+        mv "${settings}.new" "${settings}"
+    else
+        rm -f "${settings}.new"
+        warn "could not add statusLine to ${settings}"
+    fi
+}
+
 # Links, not copies, so a skill deleted upstream leaves a dangling link to
 # sweep. Linked one by one because claude.ai's synced skills share the
 # directory. An unreachable remote keeps the last copy rather than blocking the
@@ -81,6 +98,10 @@ sync_agent_config() {
     fi
 
     [[ -f ${repo}/CLAUDE.md ]] && link_into_claude_dir "${repo}/CLAUDE.md" "${claude_dir}/CLAUDE.md"
+    if [[ -f ${repo}/statusline.sh ]]; then
+        link_into_claude_dir "${repo}/statusline.sh" "${claude_dir}/statusline.sh"
+        enable_status_line
+    fi
     mkdir -p "${claude_dir}/skills"
     for skill in "${repo}"/skills/*/; do
         [[ -f ${skill}SKILL.md ]] || continue
@@ -88,7 +109,7 @@ sync_agent_config() {
         link_into_claude_dir "${skill}" "${claude_dir}/skills/${skill##*/}"
     done
 
-    for link in "${claude_dir}/CLAUDE.md" "${claude_dir}"/skills/*; do
+    for link in "${claude_dir}/CLAUDE.md" "${claude_dir}/statusline.sh" "${claude_dir}"/skills/*; do
         if [[ -L ${link} && ! -e ${link} && $(readlink "${link}") == "${repo}/"* ]]; then
             rm "${link}"
         fi
