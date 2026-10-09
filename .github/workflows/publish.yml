@@ -32,7 +32,13 @@ jobs:
     # merged is only ever set on the pull request path, and ref_name is only
     # main on a dispatch started from main: a closed event runs on the pull
     # request's own merge ref.
-    if: github.event.pull_request.merged || github.ref_name == 'main'
+    #
+    # A merge labelled base is left to the pin bump the base publish raises:
+    # published now, the agents would land on the old pinned base, ahead of the
+    # base change they may rely on.
+    if: >-
+      (github.event.pull_request.merged && !contains(github.event.pull_request.labels.*.name, 'base'))
+      || github.ref_name == 'main'
     runs-on: ubuntu-latest
 
     permissions:
