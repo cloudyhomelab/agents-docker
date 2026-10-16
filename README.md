@@ -66,16 +66,17 @@ Source it from `~/.bashrc` or `~/.zshrc`:
 source /path/to/shell-helper/agents.sh
 ```
 
-First argument is the workspace; the rest go to the CLI:
+The workspace is the current directory unless the first argument is `--agent-workspace <dir>` (`.`, `..` and paths starting with `./` or `../` are rejected).
+Every other argument goes to the CLI:
 
 ```bash
-claude .
-codex /path/to/workspace --version
-JAVA_VERSION=17 claude . --resume
-CODEX_IMAGE_TAG=0.152.0 codex .
-AGENT_MEMORY=16g gemini .
-AGENT_RUNTIME=docker claude .
-AGENT_CONFIG_REPO=https://github.com/you/agent-config.git claude .
+claude
+codex --agent-workspace /path/to/workspace --version
+JAVA_VERSION=17 claude --resume
+CODEX_IMAGE_TAG=0.152.0 codex
+AGENT_MEMORY=16g gemini
+AGENT_RUNTIME=docker claude
+AGENT_CONFIG_REPO=https://github.com/you/agent-config.git claude
 ```
 
 | Variable | Effect |

@@ -3,25 +3,50 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # shellcheck shell=bash
 
-# Containerised agent CLIs. Source from ~/.bashrc or ~/.zshrc. The first
-# argument is always the workspace: `claude . --version`, not `claude --version`.
+# Containerised agent CLIs. Source from ~/.bashrc or ~/.zshrc. The workspace
+# is the current directory unless the first argument is
+# `--agent-workspace <dir>`; every other argument goes to the CLI.
 #
-#     JAVA_VERSION=17 claude . --resume
-#     CODEX_IMAGE_TAG=0.152.0 codex ~/some/project
-#     AGENT_MEMORY=16g gemini .
-#     AGENT_RUNTIME=docker claude .
-#     AGENT_CONFIG_REPO=https://github.com/you/agent-config.git claude .
+#     JAVA_VERSION=17 claude --resume
+#     CODEX_IMAGE_TAG=0.152.0 codex --agent-workspace ~/some/project
+#     AGENT_MEMORY=16g gemini
+#     AGENT_RUNTIME=docker claude
+#     AGENT_CONFIG_REPO=https://github.com/you/agent-config.git claude
+
+function _agent_check_workspace() {
+    local tool="$1"
+    local workspace="$2"
+
+    case "$workspace" in
+        . | .. | ./* | ../*)
+            printf '%s: workspace %s is not allowed; omit it for the current directory or give a path\n' "$tool" "$workspace" >&2
+            return 1
+            ;;
+    esac
+    if [[ ! -d "$workspace" ]]; then
+        printf 'usage: %s [--agent-workspace <dir>] [%s args...]\n' "$tool" "$tool" >&2
+        return 1
+    fi
+}
 
 function _agent_run() {
     local tool="$1"
     local tag="$2"
-    local workspace="$3"
+    shift 2
 
-    if [[ ! -d "$workspace" ]]; then
-        printf 'usage: %s <workspace> [%s args...]\n' "$tool" "$tool" >&2
-        return 1
-    fi
-    shift 3
+    # only as the first argument, so a later one stays the CLI's own
+    local workspace="$PWD"
+    case "${1:-}" in
+        --agent-workspace)
+            workspace="${2:-}"
+            shift 2 || shift
+            ;;
+        --agent-workspace=*)
+            workspace="${1#*=}"
+            shift
+            ;;
+    esac
+    _agent_check_workspace "$tool" "$workspace" || return 1
 
     local runtime="${AGENT_RUNTIME:-}"
     if [[ -z "$runtime" ]]; then
