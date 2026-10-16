@@ -8,47 +8,31 @@ Docker images for three AI agent CLIs, published on Docker Hub:
 
 ## Available Images
 
-One image per agent, tagged `latest` and with the agent CLI's own version, as
-in `claude:<version>`. Each image carries every supported toolchain, so the
-image does not have to be matched to the project:
-
-- Several JDK majors (Zulu, with JavaFX) plus Maven; `JAVA_VERSIONS` in
-  `docker-bake.hcl` is the list
-- Python 3 with `pip` and `venv`, plus a venv on `PATH` carrying the Ansible
-  toolchain; `PIP_PACKAGES` in `docker-bake.hcl` is the list
-- Go
-- Node.js and npm
-- The Debian packages in `PACKAGES` in `docker-bake.hcl`
+- Tags: `latest` and the agent CLI's own version, e.g. `claude:<version>`.
+- Every image carries every toolchain, so no need to match image to project:
+  - Several JDK majors (Zulu, with JavaFX) plus Maven (`JAVA_VERSIONS` in `docker-bake.hcl`)
+  - Python 3 with `pip` and `venv`, plus a venv on `PATH` with the Ansible toolchain (`PIP_PACKAGES`)
+  - Go
+  - Node.js and npm
+  - Debian packages (`PACKAGES`)
 
 ### Selecting a JDK
 
-The LTS JDK is active by default. Override it per run with `JAVA_VERSION`,
-using either a major version or the `lts` / `latest` aliases (`JAVA_LTS` and
-`JAVA_LATEST` in `docker-bake.hcl`):
+Resolution order:
+
+1. `JAVA_VERSION` env var: a major version, or `lts` / `latest` (`JAVA_LTS` / `JAVA_LATEST` in `docker-bake.hcl`)
+2. The project's `.sdkmanrc` (`java=17`) or `.java-version` (`17`) in the working directory
+3. The LTS JDK
 
 ```bash
 docker run --rm -it -e JAVA_VERSION=17 docker.io/binarycodes/claude:latest
 ```
 
-A project can also declare its own JDK, which applies whenever `JAVA_VERSION`
-is not set. Either form works, read from the working directory:
-
-```bash
-# .sdkmanrc
-java=17
-```
-
-```bash
-# .java-version
-17
-```
-
 ### Setting the git identity
 
-`GIT_USER_NAME` and `GIT_USER_EMAIL` become git's `user.name` and `user.email`
-for everything the agent runs. Nothing is written to a config file, so the
-identity lasts only for that run. The shell helper below passes the one git
-config gives for the project, so this is only needed with a bare `docker run`:
+- `GIT_USER_NAME` / `GIT_USER_EMAIL` set git's `user.name` / `user.email` for the run.
+- Not written to any config file; lasts only for that run.
+- Only needed with bare `docker run`; the [shell helper](#shell-helper) passes it automatically.
 
 ```bash
 docker run --rm -it \
@@ -58,13 +42,13 @@ docker run --rm -it \
 
 ## Quick Start
 
-Run the CLI directly, substituting `codex` or `gemini` for `claude`:
+Substitute `codex` or `gemini` for `claude`:
 
 ```bash
 docker run --rm -it docker.io/binarycodes/claude:latest
 ```
 
-With your current project mounted:
+With the current project mounted:
 
 ```bash
 docker run --rm -it \
@@ -73,16 +57,16 @@ docker run --rm -it \
   docker.io/binarycodes/claude:latest
 ```
 
-### Shell helper function
+### Shell helper
 
-[`shell-helper/agents.sh`](shell-helper/agents.sh) defines `claude`, `codex`
-and `gemini` wrappers. Source it from `~/.bashrc` or `~/.zshrc`:
+[`shell-helper/agents.sh`](shell-helper/agents.sh) defines `claude`, `codex` and `gemini` wrappers.
+Source it from `~/.bashrc` or `~/.zshrc`:
 
 ```bash
 source /path/to/shell-helper/agents.sh
 ```
 
-The first argument is always the workspace, and the rest go to the CLI:
+First argument is the workspace; the rest go to the CLI:
 
 ```bash
 claude .
@@ -94,48 +78,45 @@ AGENT_RUNTIME=docker claude .
 AGENT_CONFIG_REPO=https://github.com/you/agent-config.git claude .
 ```
 
-It uses podman when installed and docker otherwise; `AGENT_RUNTIME` picks one.
-Under podman the host user is mapped to the container's `agent` user, so files
-written to the workspace stay yours. `<AGENT>_IMAGE_TAG` pins a published
-version.
+| Variable | Effect |
+|---|---|
+| `AGENT_RUNTIME` | `podman` or `docker`; default is podman when installed |
+| `<AGENT>_IMAGE_TAG` | Pin a published version |
+| `AGENT_MEMORY` | Raise the container memory cap |
+| `JAVA_VERSION` | Forwarded only when set, so `.sdkmanrc` decides otherwise |
+| `AGENT_CONFIG_REPO` | Personal Claude config repo, see below |
 
-The workspace is mounted at `/workspace/<folder name>`, since the CLIs keep
-memory, sessions and trust per working directory. Two folders with the same
-name share that state.
+Behaviour:
 
-`JAVA_VERSION` is forwarded only when it is set in your shell, so a project's
-own `.sdkmanrc` still decides when you do not. The git identity is the one git
-config gives for the project, so a per-repo or `includeIf` identity applies.
+- **Workspace path**: Mounted at `/workspace/<folder name>`, because the CLIs key memory, sessions and trust on the working directory. Two folders with the same name share that state.
+- **File ownership**: Under podman the host user maps to the container's `agent` user, so written files stay yours.
+- **Git identity**: Taken from git config for the project, so per-repo and `includeIf` identities apply.
+- **Volumes**
+  - One config volume per CLI (settings, credentials), plus separate Go and cache volumes.
+  - Host `~/.m2` is shared when it exists.
+  - Toolchains and CLIs are outside the volumes, so `--pull always` refreshes them.
+- **Security**
+  - No capabilities, no privilege gain, pid and memory caps sized for a Maven build.
+  - Network egress is not restricted. To filter it, attach a user-defined network (`docker network create`, then `--network`) and use the host firewall.
 
-`AGENT_CONFIG_REPO`, exported in your shell rc, carries your own Claude
-instructions and skills to every machine. It names a git repository with a
-`CLAUDE.md` and `skills/<name>/SKILL.md` folders, cloned without credentials,
-so use a public HTTPS URL. On each start the claude image clones or
-fast-forwards it into `~/.claude/agent-config` and links `CLAUDE.md` and each
-skill into `~/.claude`. An optional `statusline.sh` at the repo root is linked
-too and set as the status line in `~/.claude/settings.json`, unless that
-already names one. A skill deleted from the repo loses its link; a file
-that is not a link is never replaced. When the repository cannot be reached,
-the last copy is used.
+#### Personal config repo (`AGENT_CONFIG_REPO`)
 
-Each CLI gets its own config volume for settings and credentials, plus separate
-volumes for its Go and cache directories; the host `~/.m2` is shared when it
-exists. Toolchains and the agent CLIs live outside those volumes, so they always
-come from the image and are refreshed by `--pull always`.
+Carries your Claude instructions and skills to every machine. Export it in your shell rc.
 
-The agent inside runs whatever the workspace and the model decide, so the
-container gets no capabilities and no privilege gain, and a pid and memory cap
-sized for a Maven build; raise the memory with `AGENT_MEMORY` if yours needs
-more. Network egress is not restricted, since which APIs and registries to allow
-is your call: attach the container to a user-defined network (`docker network
-create`, then `--network`) and filter it with the host firewall.
+- Public HTTPS git repo (cloned without credentials) containing:
+  - `CLAUDE.md`
+  - `skills/<name>/SKILL.md`
+  - optional `statusline.sh` at the root
+- On each start the claude image clones or fast-forwards it into `~/.claude/agent-config` and links into `~/.claude`:
+  - `CLAUDE.md` and each skill
+  - `statusline.sh`, set as the status line in `~/.claude/settings.json` unless one is already set
+- A skill deleted from the repo loses its link; a non-link file is never replaced.
+- If the repo is unreachable, the last copy is used.
 
 ## Verifying the Images
 
-Every published image is signed with [cosign](https://github.com/sigstore/cosign)
-in keyless mode, so there is no public key to distribute: the signature is tied
-to the workflow run that produced it, and verifying asserts that the image was
-built by `.github/workflows/publish.yml` in this repository:
+- Signed with [cosign](https://github.com/sigstore/cosign) in keyless mode, so there is no public key to distribute.
+- Verification asserts the image was built by `.github/workflows/publish.yml` in this repository.
 
 ```bash
 cosign verify \
@@ -145,81 +126,57 @@ cosign verify \
   docker.io/binarycodes/claude:latest
 ```
 
-Substitute `codex` or `gemini` for `claude`, and a version tag for `latest`.
-Tags published before the workflow was renamed carry its old name, `build.yml`.
-`docker.io/binarycodes/agent-base`, the toolchain image the agents are built
-on, is signed the same way by `publish-base.yml`; substitute that file name in
-the identity.
+- Substitute `codex` / `gemini` for `claude`, and a version tag for `latest`.
+- Older tags were signed by `build.yml`; use that file name for them.
+- `docker.io/binarycodes/agent-base` (the toolchain base image) is signed by `publish-base.yml`.
+- The identity stops at `@refs/` because the ref depends on the trigger (merged PR or `workflow_dispatch`). `cosign verify` prints the matched identity; pin it further once you've seen it.
 
-The identity stops at `@refs/` because the ref depends on how the run was
-triggered, a merged pull request or a manual `workflow_dispatch`. The repository
-and workflow file are anchored exactly; `cosign verify` prints the identity it
-matched, so pin it further once you have seen what your tag carries.
+### Provenance and SBOM
 
-The signature is on the image index, which also carries the SLSA provenance and
-SBOM attestations the build attached. The provenance says what was built rather
-than who built it: the source repository and commit, the `Dockerfile` and the
-build arguments, so a pulled image can be matched to a commit here and to the
-versions `docker-bake.hcl` pinned at it.
+- Attached to the image index alongside the signature.
+- Provenance records source repo and commit, `Dockerfile` and build args, enough to match an image to a commit and its `docker-bake.hcl` pins.
 
 ```bash
 docker buildx imagetools inspect docker.io/binarycodes/claude:latest \
-  --format '{{ json .Provenance }}'
+  --format '{{ json .Provenance }}'   # or '{{ json .SBOM }}'
 ```
-
-`{{ json .SBOM }}` prints the SBOM the same way.
 
 ## Build Locally
 
-Build all default targets, or a single agent:
-
 ```bash
-docker buildx bake
-docker buildx bake claude
+docker buildx bake                          # all default targets
+docker buildx bake claude                   # one agent
+docker buildx bake --print                  # resolved build plan
+.github/scripts/smoke-test.sh claude        # check the image runs (as in PR CI)
 ```
 
-Print the resolved build plan:
-
-```bash
-docker buildx bake --print
-```
-
-Check that a built image actually runs, as the pull request workflow does:
-
-```bash
-.github/scripts/smoke-test.sh claude
-```
-
-These build for the host platform only. The published images are multi-platform,
-which needs a `docker-container` builder and `LOCAL=false` in the environment.
-
-The toolchains under the agents are their own image, `agent-base`, built from
-`base/` with its own bake file, from the repository root as well:
+Base toolchain image (`agent-base`, from `base/`), run from the repo root:
 
 ```bash
 docker buildx bake -f base/docker-bake.hcl
 BAKE_FILE=base/docker-bake.hcl .github/scripts/smoke-test.sh base
 ```
 
-Run the tests for the entrypoint and the update script, which need no image:
+Tests for the entrypoint and update script (no image needed):
 
 ```bash
 bats tests
 ```
 
+- Local builds target the host platform only.
+- Multi-platform builds need a `docker-container` builder and `LOCAL=false`.
+
 ## Contributing
 
-Enable the repository's hooks once per clone:
+Enable the hooks once per clone:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-`pre-commit` then runs the same `shellcheck`, `hadolint` and `bats` checks the
-pull request workflow does, and `commit-msg` requires a single-line
-[Conventional Commits](https://www.conventionalcommits.org) message. None of the three is
-required locally: one that is not installed is reported and skipped, and CI
-remains the enforcement point.
+- `pre-commit`: Runs `shellcheck`, `hadolint` and `bats`, same as PR CI.
+- `commit-msg`: Requires a single-line [Conventional Commits](https://www.conventionalcommits.org) message.
+- Missing tools are reported and skipped; CI is the enforcement point.
 
 ## License
 
