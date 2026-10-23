@@ -94,7 +94,7 @@ jobs:
       # The same file list as the pre-commit hook runs, glob included, so a
       # hook added later is linted without either side being updated.
       - name: lint the shell scripts
-        run: shellcheck .githooks/* scripts/agent-entrypoint shell-helper/agents.sh .github/scripts/*.sh
+        run: shellcheck .githooks/* scripts/agent-entrypoint base/install-jdks.sh shell-helper/agents.sh .github/scripts/*.sh
 
       # The linters prove the scripts parse; this proves their branches do what
       # the comments claim -- the entrypoint's JDK resolution order and the
