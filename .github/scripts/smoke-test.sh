@@ -52,6 +52,14 @@ CHECKS=(
   "ripgrep   rg --version"
   "jq        jq --version"
   "hadolint  hadolint --version"
+  "tofu      tofu version"
+  "tflint    tflint --version"
+  "trivy     trivy --version"
+  "sops      sops --version"
+  "age       age --version"
+  "just      just --version"
+  "direnv    direnv version"
+  "pre-commit pre-commit --version"
   "setuid    ! find / -xdev -perm /6000 -type f 2>/dev/null | grep ."
 )
 

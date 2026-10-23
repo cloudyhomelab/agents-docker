@@ -13,6 +13,10 @@ variable "REVISION" { default = "" }
 variable "GO_VERSION" { default = "1.27.0" }
 
 variable "HADOLINT_VERSION" { default = "2.15.1" }
+variable "OPENTOFU_VERSION" { default = "1.13.2" }
+variable "TFLINT_VERSION" { default = "0.65.0" }
+variable "TRIVY_VERSION" { default = "0.76.1" }
+variable "SOPS_VERSION" { default = "3.13.3" }
 
 # Every major listed here is installed; the entrypoint activates one per run.
 variable "JAVA_VERSIONS" {
@@ -44,13 +48,16 @@ variable "BASE_TAG" { default = "" }
 variable "PACKAGES" {
   type = list(string)
   default = [
+    "age",
     "bash",
     "bats",
     "build-essential", # cgo, native pip wheels, node-gyp
     "ca-certificates",
     "curl",
+    "direnv",
     "git",
     "jq",
+    "just",
     "make",
     "ncurses-term",
     "nodejs",
@@ -85,6 +92,7 @@ variable "PIP_PACKAGES" {
     # The driver only; `molecule test` additionally needs a podman binary,
     # which the image deliberately does not carry.
     "molecule-plugins[podman]==26.7.15",
+    "pre-commit==4.7.0",
   ]
 }
 
@@ -115,12 +123,16 @@ target "base" {
     PIP_PACKAGES = join(" ", PIP_PACKAGES)
     GO_VERSION = GO_VERSION
     HADOLINT_VERSION = HADOLINT_VERSION
+    OPENTOFU_VERSION = OPENTOFU_VERSION
+    TFLINT_VERSION = TFLINT_VERSION
+    TRIVY_VERSION = TRIVY_VERSION
+    SOPS_VERSION = SOPS_VERSION
     JAVA_VERSIONS = join(" ", JAVA_VERSIONS)
     JAVA_LTS = JAVA_LTS
     JAVA_LATEST = JAVA_LATEST
   }
 
-  target = "jdk"
+  target = "tools"
 
   tags = concat(
     ["${REGISTRY}/${NAMESPACE}/agent-base:latest"],

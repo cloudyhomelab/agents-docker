@@ -14,6 +14,7 @@ Docker images for three AI agent CLIs, published on Docker Hub:
   - Python 3 with `pip` and `venv`, plus a venv on `PATH` with the Ansible toolchain (`PIP_PACKAGES`)
   - Go
   - Node.js and npm
+  - OpenTofu, TFLint, Trivy and SOPS (versions in `base/docker-bake.hcl`)
   - Debian packages (`PACKAGES`)
 
 ### Selecting a JDK

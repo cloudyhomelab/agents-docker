@@ -28,6 +28,7 @@ claude: &build-inputs
   - all:
       - changed-files:
           - all-globs-to-any-file:
+              - "!.githooks/**"
               - "!.github/**"
               - "!base/**"
               - "!docs/**"
