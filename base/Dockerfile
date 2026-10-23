@@ -106,3 +106,34 @@ ENV NPM_CONFIG_PREFIX=/home/agent/.npm-global
 ENV PATH="/home/agent/.npm-global/bin:${PATH}"
 
 RUN install -d -o agent -g agent /home/agent/.npm-global
+
+
+#====================
+# install release binaries
+#====================
+FROM jdk AS tools
+ARG TARGETARCH
+ARG OPENTOFU_VERSION
+ARG TFLINT_VERSION
+ARG TRIVY_VERSION
+ARG SOPS_VERSION
+
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        -o /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${OPENTOFU_VERSION}/tofu_${OPENTOFU_VERSION}_linux_${TARGETARCH}.tar.gz" \
+    && tar -xzf /tmp/tofu.tar.gz --no-same-owner -C /usr/local/bin tofu \
+    && rm /tmp/tofu.tar.gz
+
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        -o /tmp/tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_${TARGETARCH}.zip" \
+    && unzip -q /tmp/tflint.zip tflint -d /usr/local/bin \
+    && rm /tmp/tflint.zip
+
+RUN case "${TARGETARCH}" in amd64) arch=64bit ;; arm64) arch=ARM64 ;; *) echo "no trivy build for ${TARGETARCH}" >&2; exit 1 ;; esac \
+    && curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${arch}.tar.gz" \
+    && tar -xzf /tmp/trivy.tar.gz --no-same-owner -C /usr/local/bin trivy \
+    && rm /tmp/trivy.tar.gz
+
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        -o /usr/local/bin/sops "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.${TARGETARCH}" \
+    && chmod 0755 /usr/local/bin/sops
