@@ -154,7 +154,7 @@ jobs:
       # its rate limit with every other runner on the same address.
       - name: login to docker hub
         if: env.DOCKERHUB_USERNAME != ''
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -168,7 +168,7 @@ jobs:
       # at all.
       - name: build the base without publishing
         if: needs.select.outputs.base == 'true'
-        uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
         env:
           LOCAL: true
         with:
@@ -192,7 +192,7 @@ jobs:
       # inputs that change every time.
       - name: build the agents without publishing
         if: needs.select.outputs.agents != ''
-        uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
         env:
           BUILD_AGENTS: ${{ needs.select.outputs.agents }}
           LOCAL: true
