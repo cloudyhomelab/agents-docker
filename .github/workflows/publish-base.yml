@@ -79,7 +79,7 @@ jobs:
       # layers it publishes are the ones that were tested; arm64 is built under
       # emulation and relies on the native pre-merge build in pr.yml.
       - name: build the host platform for the smoke test
-        uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
         env:
           LOCAL: true
           REVISION: ${{ steps.name.outputs.revision }}
@@ -97,7 +97,7 @@ jobs:
         run: .github/scripts/smoke-test.sh base
 
       - name: login to docker hub
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -110,7 +110,7 @@ jobs:
       # write costs the next build time; a lost publish costs the base.
       - name: build and push
         id: bake
-        uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7.4.0
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
         env:
           LOCAL: false
           REVISION: ${{ steps.name.outputs.revision }}
