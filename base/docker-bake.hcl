@@ -10,7 +10,7 @@ variable "NAMESPACE"  { default = "binarycodes" }
 # leaves it empty, which is the honest answer for a working tree.
 variable "REVISION" { default = "" }
 
-variable "GO_VERSION" { default = "1.27.0" }
+variable "GO_VERSION" { default = "1.27.3" }
 
 variable "HADOLINT_VERSION" { default = "2.15.1" }
 variable "TFLINT_VERSION" { default = "0.65.0" }
