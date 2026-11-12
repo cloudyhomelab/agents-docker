@@ -17,7 +17,7 @@ variable "BASE_TAG" { default = "2026.11.09.1855" }
 variable "BASE_DIGEST" { default = "sha256:24950e483880ba0e98316ce6b3039a78ace8ce835e00e755afae6beeeebd1940" }
 
 variable "CLAUDE_VERSION" { default = "2.1.322" }
-variable "CODEX_VERSION" { default = "0.167.1" }
+variable "CODEX_VERSION" { default = "0.167.2" }
 variable "GEMINI_VERSION" { default = "0.68.0" }
 
 variable "LOCAL" { default = true }
