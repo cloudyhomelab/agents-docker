@@ -10,10 +10,9 @@ variable "NAMESPACE"  { default = "binarycodes" }
 # leaves it empty, which is the honest answer for a working tree.
 variable "REVISION" { default = "" }
 
-variable "GO_VERSION" { default = "1.27.0" }
+variable "GO_VERSION" { default = "1.27.3" }
 
 variable "HADOLINT_VERSION" { default = "2.15.1" }
-variable "OPENTOFU_VERSION" { default = "1.13.2" }
 variable "TFLINT_VERSION" { default = "0.65.0" }
 variable "TRIVY_VERSION" { default = "0.76.1" }
 variable "SOPS_VERSION" { default = "3.13.3" }
@@ -62,6 +61,7 @@ variable "PACKAGES" {
     "ncurses-term",
     "nodejs",
     "npm",
+    "packer",
     "python3",
     "python3-dev", # building C extensions from source
     "python3-pip",
@@ -69,6 +69,8 @@ variable "PACKAGES" {
     "ripgrep",
     "shellcheck",
     "terminfo",
+    "terramate",
+    "tofu",
     "unzip",
     "zip",
   ]
@@ -123,7 +125,6 @@ target "base" {
     PIP_PACKAGES = join(" ", PIP_PACKAGES)
     GO_VERSION = GO_VERSION
     HADOLINT_VERSION = HADOLINT_VERSION
-    OPENTOFU_VERSION = OPENTOFU_VERSION
     TFLINT_VERSION = TFLINT_VERSION
     TRIVY_VERSION = TRIVY_VERSION
     SOPS_VERSION = SOPS_VERSION
