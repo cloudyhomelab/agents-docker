@@ -14,7 +14,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # set -f so a pattern such as linux-headers-* reaches apt unglobbed.
 # Nothing switches user, so setuid/setgid bits are only an escalation path.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
     --mount=type=bind,source=add-external-repo.sh,target=/tmp/add-external-repo.sh \
     bash /tmp/add-external-repo.sh \
     && rm -f /etc/apt/apt.conf.d/docker-clean \
