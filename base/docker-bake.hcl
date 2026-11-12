@@ -13,7 +13,6 @@ variable "REVISION" { default = "" }
 variable "GO_VERSION" { default = "1.27.0" }
 
 variable "HADOLINT_VERSION" { default = "2.15.1" }
-variable "OPENTOFU_VERSION" { default = "1.13.2" }
 variable "TFLINT_VERSION" { default = "0.65.0" }
 variable "TRIVY_VERSION" { default = "0.76.1" }
 variable "SOPS_VERSION" { default = "3.13.3" }
@@ -62,6 +61,7 @@ variable "PACKAGES" {
     "ncurses-term",
     "nodejs",
     "npm",
+    "packer",
     "python3",
     "python3-dev", # building C extensions from source
     "python3-pip",
@@ -69,6 +69,8 @@ variable "PACKAGES" {
     "ripgrep",
     "shellcheck",
     "terminfo",
+    "terramate",
+    "tofu",
     "unzip",
     "zip",
   ]

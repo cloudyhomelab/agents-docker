@@ -14,8 +14,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # set -f so a pattern such as linux-headers-* reaches apt unglobbed.
 # Nothing switches user, so setuid/setgid bits are only an escalation path.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked
+    --mount=type=bind,source=add-external-repo.sh,target=/tmp/add-external-repo.sh \
+    bash /tmp/add-external-repo.sh \
+    && rm -f /etc/apt/apt.conf.d/docker-clean \
     && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache \
     && set -f \
     && apt-get update \
@@ -113,15 +115,9 @@ RUN install -d -o agent -g agent /home/agent/.npm-global
 #====================
 FROM jdk AS tools
 ARG TARGETARCH
-ARG OPENTOFU_VERSION
 ARG TFLINT_VERSION
 ARG TRIVY_VERSION
 ARG SOPS_VERSION
-
-RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
-        -o /tmp/tofu.tar.gz "https://github.com/opentofu/opentofu/releases/download/v${OPENTOFU_VERSION}/tofu_${OPENTOFU_VERSION}_linux_${TARGETARCH}.tar.gz" \
-    && tar -xzf /tmp/tofu.tar.gz --no-same-owner -C /usr/local/bin tofu \
-    && rm /tmp/tofu.tar.gz
 
 RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
         -o /tmp/tflint.zip "https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/tflint_linux_${TARGETARCH}.zip" \
