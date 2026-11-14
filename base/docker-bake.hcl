@@ -54,6 +54,8 @@ variable "PACKAGES" {
     "ca-certificates",
     "curl",
     "direnv",
+    "gh",
+    "glab",
     "git",
     "jq",
     "just",
@@ -62,9 +64,11 @@ variable "PACKAGES" {
     "nodejs",
     "npm",
     "packer",
+    "procps", # required by codex
     "python3",
     "python3-dev", # building C extensions from source
     "python3-pip",
+    "python3-pytest",
     "python3-venv",
     "ripgrep",
     "shellcheck",

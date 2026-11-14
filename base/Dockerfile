@@ -55,6 +55,8 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     && "${VIRTUAL_ENV}/bin/pip" install ${PIP_PACKAGES} \
     && chmod -R a+rX "${VIRTUAL_ENV}"
 
+COPY --from=ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 /uv /uvx /usr/local/bin/
+
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 
