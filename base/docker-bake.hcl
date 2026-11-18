@@ -17,22 +17,16 @@ variable "TFLINT_VERSION" { default = "0.65.0" }
 variable "TRIVY_VERSION" { default = "0.76.1" }
 variable "SOPS_VERSION" { default = "3.13.3" }
 
-# Every major listed here is installed; the entrypoint activates one per run.
+# Temurin majors, each installed at its newest release when the image is built;
+# latest is the newest feature release, whatever its number. The entrypoint
+# activates one per run, and /opt/java/latest points at the highest installed.
 variable "JAVA_VERSIONS" {
   type = list(string)
-  default = [
-    "8.0.502.fx-zulu",
-    "11.0.32.fx-zulu",
-    "17.0.20.fx-zulu",
-    "21.0.12.fx-zulu",
-    "25.0.4.fx-zulu",
-    "26.0.2.fx-zulu",
-  ]
+  default = ["8", "11", "17", "21", "25", "latest"]
 }
 
-# Majors from the list above, exposed as the /opt/java/lts and /opt/java/latest aliases.
+# The default JDK and the /opt/java/lts alias; must be a major listed above.
 variable "JAVA_LTS" { default = "25" }
-variable "JAVA_LATEST" { default = "26" }
 
 variable "LOCAL" { default = true }
 
@@ -134,7 +128,6 @@ target "base" {
     SOPS_VERSION = SOPS_VERSION
     JAVA_VERSIONS = join(" ", JAVA_VERSIONS)
     JAVA_LTS = JAVA_LTS
-    JAVA_LATEST = JAVA_LATEST
   }
 
   target = "tools"
