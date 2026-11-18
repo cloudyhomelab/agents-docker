@@ -12,7 +12,7 @@ on:
     branches:
       - main
   # Weekly, for the Debian updates the apt layer would otherwise wait on; the
-  # scheduled run rebuilds that layer without cache, see below.
+  # scheduled run, like a dispatch, rebuilds that layer without cache, see below.
   schedule:
     - cron: "0 3 * * 1"
 
@@ -57,10 +57,10 @@ jobs:
           echo "revision=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
           echo "tag=$(date -u +%Y.%m.%d.%H%M)" >> "${GITHUB_OUTPUT}"
 
-          # The scheduled run drops the cache for the apt stage, and with it
-          # every stage above, so Debian's updates actually land; everything
-          # else relies on the cache as usual.
-          if [[ ${GITHUB_EVENT_NAME} == schedule ]]; then
+          # The scheduled and dispatched runs drop the cache for the apt stage,
+          # and with it every stage above, so Debian's updates and the newest
+          # JDKs and Maven actually land; a merge relies on the cache as usual.
+          if [[ ${GITHUB_EVENT_NAME} == schedule || ${GITHUB_EVENT_NAME} == workflow_dispatch ]]; then
             echo "no-cache=base.no-cache-filter=base" >> "${GITHUB_OUTPUT}"
           else
             echo "no-cache=" >> "${GITHUB_OUTPUT}"
