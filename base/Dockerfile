@@ -85,23 +85,18 @@ RUN install -d -o agent -g agent /home/agent/go
 FROM go AS jdk
 ARG JAVA_VERSIONS
 ARG JAVA_LTS
-ARG JAVA_LATEST
 
-# Outside /home/agent: the home volume is seeded only once and would freeze the toolchains.
-ENV SDKMAN_DIR="/opt/sdkman"
-# Not piped into bash: /bin/sh has no pipefail, so a failed download would exit 0.
-RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
-        -o /tmp/sdkman.sh "https://get.sdkman.io?ci=true&rcupdate=false" \
-    && bash /tmp/sdkman.sh \
-    && rm /tmp/sdkman.sh
-
-RUN --mount=type=bind,source=install-jdks.sh,target=/tmp/install-jdks.sh \
+# Unpinned, so a cached layer keeps the JDKs and Maven it was built with: only
+# the weekly no-cache run of the base stage brings new releases in.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    --mount=type=bind,source=install-jdks.sh,target=/tmp/install-jdks.sh \
     bash /tmp/install-jdks.sh
 
 ENV JAVA_HOME="/opt/java/lts"
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
-ENV M2_HOME="${SDKMAN_DIR}/candidates/maven/current"
+ENV M2_HOME="/opt/maven"
 ENV PATH="${M2_HOME}/bin:${PATH}"
 
 RUN install -d -o agent -g agent /home/agent/.m2

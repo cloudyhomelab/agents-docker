@@ -10,7 +10,7 @@ Docker images for three AI agent CLIs, published on Docker Hub:
 
 - Tags: `latest` and the agent CLI's own version, e.g. `claude:<version>`.
 - Every image carries every toolchain, so no need to match image to project:
-  - Several JDK majors (Zulu, with JavaFX) plus Maven (`JAVA_VERSIONS` in `docker-bake.hcl`)
+  - Several Temurin JDK majors plus Maven, each at its newest release when the base is built (`JAVA_VERSIONS` in `base/docker-bake.hcl`)
   - Python 3 with `pip` and `venv`, plus a venv on `PATH` with the Ansible toolchain (`PIP_PACKAGES`)
   - Go
   - Node.js and npm
@@ -21,7 +21,7 @@ Docker images for three AI agent CLIs, published on Docker Hub:
 
 Resolution order:
 
-1. `JAVA_VERSION` env var: a major version, or `lts` / `latest` (`JAVA_LTS` / `JAVA_LATEST` in `docker-bake.hcl`)
+1. `JAVA_VERSION` env var: a major version, `lts` (`JAVA_LTS` in `base/docker-bake.hcl`) or `latest` (the highest installed major)
 2. The project's `.sdkmanrc` (`java=17`) or `.java-version` (`17`) in the working directory
 3. The LTS JDK
 

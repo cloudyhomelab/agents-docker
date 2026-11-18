@@ -21,3 +21,7 @@ chmod a+r /etc/apt/sources.list.d/opentofu.list
 
 # Add the Terramate repo
 echo "deb [trusted=yes] https://repo.terramate.io/apt/ /" > /etc/apt/sources.list.d/terramate.list
+
+# Add the Adoptium repo
+curl -fsSL https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --no-tty --batch --dearmor -o /usr/share/keyrings/adoptium-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/adoptium-archive-keyring.gpg] https://packages.adoptium.net/artifactory/deb ${VERSION_CODENAME} main" > /etc/apt/sources.list.d/adoptium.list
