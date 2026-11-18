@@ -60,10 +60,15 @@ jobs:
           # The scheduled and dispatched runs drop the cache for the apt stage,
           # and with it every stage above, so Debian's updates and the newest
           # JDKs and Maven actually land; a merge relies on the cache as usual.
+          # Only the smoke-test build drops it: the push must reuse that build,
+          # so it skips the gha cache instead, whose stale layers would match
+          # the same cache keys, and finds amd64 in the builder's own cache.
           if [[ ${GITHUB_EVENT_NAME} == schedule || ${GITHUB_EVENT_NAME} == workflow_dispatch ]]; then
             echo "no-cache=base.no-cache-filter=base" >> "${GITHUB_OUTPUT}"
+            echo "push-cache-from=" >> "${GITHUB_OUTPUT}"
           else
             echo "no-cache=" >> "${GITHUB_OUTPUT}"
+            echo "push-cache-from=base.cache-from=type=gha,scope=base" >> "${GITHUB_OUTPUT}"
           fi
 
       - name: set up docker buildx
@@ -120,9 +125,8 @@ jobs:
           targets: base
           push: true
           set: |
-            base.cache-from=type=gha,scope=base
+            ${{ steps.name.outputs.push-cache-from }}
             base.cache-to=type=gha,mode=max,scope=base,ignore-error=true
-            ${{ steps.name.outputs.no-cache }}
             *.attest=type=provenance,mode=max
             *.attest=type=sbom,generator=docker/scout-sbom-indexer:latest
 
