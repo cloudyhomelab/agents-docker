@@ -16,9 +16,9 @@ variable "REVISION" { default = "" }
 variable "BASE_TAG" { default = "2026.11.18.1044" }
 variable "BASE_DIGEST" { default = "sha256:ae23b4cf940230d734da1a7c14bbda2a0b30fd3e68a943ab57b2547711d09a3c" }
 
-variable "CLAUDE_VERSION" { default = "2.1.328" }
-variable "CODEX_VERSION" { default = "0.170.0" }
-variable "GEMINI_VERSION" { default = "0.69.0" }
+variable "CLAUDE_VERSION" { default = "2.1.329" }
+variable "CODEX_VERSION" { default = "0.171.0" }
+variable "GEMINI_VERSION" { default = "0.70.0" }
 
 variable "LOCAL" { default = true }
 
